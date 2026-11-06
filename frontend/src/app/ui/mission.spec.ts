@@ -19,21 +19,23 @@ describe('Mission', () => {
     return fixture;
   }
 
-  it('moves from the briefing to the safe and unlocks the dossier after a verified result', async () => {
-    const run = vi.fn().mockResolvedValue({
-      attempts: 48,
-      crackedCombination: '0800666666',
-      timeTaken: 0.001,
-      success: true,
-    });
+  it('moves from the briefing to the safe and shows replay in the decoder after a verified result', async () => {
+    const run = vi.fn(
+      async (
+        target: string,
+        _algorithm: CrackAlgorithm,
+        onProgress: (progress: CrackProgress) => void,
+      ) => {
+        onProgress({ attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 });
+        return { attempts: 48, crackedCombination: target, timeTaken: 0.001, success: true };
+      },
+    );
     const fixture = setup(run, false);
     const mission = fixture.componentInstance;
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('form')).toBeNull();
     expect(element.textContent).toContain('Enter the suite');
 
-    mission.goToScene('dossier');
-    expect(mission.scene()).toBe('briefing');
     element.querySelector<HTMLButtonElement>('.briefing .story-action')?.click();
     fixture.detectChanges();
     expect(element.textContent).toContain('Inspect the safe');
@@ -43,12 +45,11 @@ describe('Mission', () => {
 
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    element.querySelector<HTMLButtonElement>('.dossier-action')?.click();
-    fixture.detectChanges();
-    expect(element.textContent).toContain('Dossier recovered.');
+    expect(mission.scene()).toBe('decoder');
+    expect(element.querySelector('#replay-title')?.textContent).toBe('Decoder replay');
     expect(element.textContent).toContain('0800666666');
 
-    mission.restartMission();
+    mission.goToScene('suite');
     expect(mission.scene()).toBe('suite');
     expect(mission.result()).toBeNull();
   });
@@ -84,66 +85,51 @@ describe('Mission', () => {
     expect(mission.phase()).toBe('opened');
     expect(fixture.nativeElement.textContent).toContain('Matches target');
 
-    const trigger = fixture.nativeElement.querySelector('.text-button') as HTMLButtonElement;
-    trigger.click();
-    fixture.detectChanges();
-    expect(mission.replayAttempt()).toEqual(first);
+    const replayGuess = () =>
+      fixture.nativeElement.querySelector('.replay-guess code')?.textContent;
+    expect(replayGuess()).toBe(first.currentCombination);
     mission.moveReplay(1);
-    expect(mission.replayAttempt()).toEqual(last);
-    expect(mission.result()).toEqual(result);
-    expect(mission.attemptCount()).toBe(48);
-    expect(mission.elapsedTime()).toBe('0.000420');
-
-    mission.closeReplay();
     fixture.detectChanges();
-    expect(mission.replayIndex()).toBeNull();
-    expect(document.activeElement).toBe(trigger);
+    expect(replayGuess()).toBe(last.currentCombination);
+    expect(mission.result()).toEqual(result);
+    expect(mission.telemetry()[0].attempts).toBe(48);
+    expect(mission.telemetry()[0].seconds).toBe(0.00042);
   });
 
-  it('compares the same target with the other method and preserves the first result on retry', async () => {
-    const target = '0800666666';
+  it('preserves the completed method if the second run fails', async () => {
     const positional = {
       attempts: 48,
-      crackedCombination: target,
+      crackedCombination: '0800666666',
       timeTaken: 0.001,
-      success: true,
-    };
-    const backtracking = {
-      attempts: 235,
-      crackedCombination: target,
-      timeTaken: 0.002,
       success: true,
     };
     const run = vi
       .fn()
-      .mockResolvedValueOnce(positional)
-      .mockRejectedValueOnce(new Error('Interrupted'))
-      .mockResolvedValueOnce(backtracking);
+      .mockImplementationOnce(
+        async (
+          _target: string,
+          _algorithm: CrackAlgorithm,
+          onProgress: (progress: CrackProgress) => void,
+        ) => {
+          onProgress({ attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 });
+          return positional;
+        },
+      )
+      .mockRejectedValueOnce(new Error('Interrupted'));
     const fixture = setup(run);
     const mission = fixture.componentInstance;
-    await mission.start(new Event('submit'));
-    mission.goToScene('dossier');
-
-    await mission.tryOtherMethod();
-    expect(mission.scene()).toBe('decoder');
-    expect(mission.phase()).toBe('error');
-    expect(mission.comparison()).toBeNull();
+    mission.updateAlgorithm('both');
 
     await mission.start(new Event('submit'));
     fixture.detectChanges();
     expect(run.mock.calls.map(([code, algorithm]) => [code, algorithm])).toEqual([
-      [target, 'positional'],
-      [target, 'backtracking'],
-      [target, 'backtracking'],
+      ['0800666666', 'positional'],
+      ['0800666666', 'backtracking'],
     ]);
-    expect(mission.scene()).toBe('dossier');
-    expect(mission.comparison()).toEqual([
-      { algorithm: 'positional', result: positional },
-      { algorithm: 'backtracking', result: backtracking },
-    ]);
-    expect(fixture.nativeElement.querySelector('table')?.textContent).toContain('235');
-    mission.restartMission();
-    expect(mission.comparison()).toBeNull();
+    expect(mission.phase()).toBe('error');
+    expect(mission.result()).toEqual(positional);
+    expect(mission.replayRun()?.algorithm).toBe('positional');
+    expect(fixture.nativeElement.textContent).toContain('Positional matching completed');
   });
 
   it('rejects invalid input and reports connection failures without marking valid input invalid', async () => {
@@ -193,7 +179,6 @@ describe('Mission', () => {
     expect(mission.algorithm()).toBe('positional');
     await mission.start(new Event('submit'));
     expect(mission.phase()).toBe('opened');
-    mission.toggleReplay();
     expect(mission.replayIndex()).toBe(0);
 
     backtracking.click();
@@ -201,8 +186,8 @@ describe('Mission', () => {
     expect(mission.algorithm()).toBe('backtracking');
     expect(mission.phase()).toBe('ready');
     expect(mission.result()).toBeNull();
-    expect(mission.trace()).toEqual([]);
-    expect(mission.replayIndex()).toBeNull();
+    expect(mission.runs()).toEqual([]);
+    expect(mission.replayRun()).toBeUndefined();
 
     await mission.showAlgorithm();
     fixture.detectChanges();
@@ -248,22 +233,19 @@ describe('Mission', () => {
 
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    expect(mission.trace()).toHaveLength(130);
+    expect(mission.replayRun()?.probes).toHaveLength(130);
     expect(mission.result()).toEqual(result);
-    expect(mission.attemptCount()).toBe(4097);
+    expect(mission.telemetry()[0].attempts).toBe(4097);
 
-    const trigger = fixture.nativeElement.querySelector('.text-button') as HTMLButtonElement;
-    trigger.click();
-    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Sampled replay');
     expect(fixture.nativeElement.textContent).toContain('130 recorded probes from 4097 attempts');
     expect(fixture.nativeElement.textContent).toContain('Probe 1 of 4097');
 
-    mission.moveReplay(128);
+    mission.seekReplay(128);
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Probe 4096 of 4097');
-    expect(mission.attemptCount()).toBe(4097);
-    expect(mission.elapsedTime()).toBe('0.4100');
+    expect(mission.telemetry()[0].attempts).toBe(4097);
+    expect(mission.telemetry()[0].seconds).toBe(0.41);
   });
 
   it('blocks duplicate submissions and aborts an active request on destruction', async () => {

@@ -23,3 +23,21 @@
     )
   );
 }
+
+.replay-slider {
+  @include mat.slider-overrides(
+    (
+      inactive-track-color: #897b65,
+      active-track-color: #243329,
+    )
+  );
+}
+
+.run-progress {
+  @include mat.progress-bar-overrides(
+    (
+      track-color: #897b65,
+      active-indicator-color: #243329,
+    )
+  );
+}

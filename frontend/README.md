@@ -2,7 +2,7 @@
 
 The Angular frontend for Safe Cracker.
 
-Enter Suite 07 from the briefing and inspect the safe to open the decoder. A verified run unlocks the dossier. The briefing also offers a direct route to the decoder.
+Enter Suite 07 from the briefing and inspect the safe to open the decoder. Enter ten digits in the vault readout and select **Positional matching**, **Backtracking**, or **Both**. A separate display shows the decoder’s guesses. The briefing also offers a direct route to the decoder.
 
 ## Run locally
 
@@ -36,7 +36,7 @@ npx playwright install chromium
 npm run test:a11y
 ```
 
-The mission UI calls the `CrackSafeGateway` port with the selected algorithm. Angular injects the HTTP/SSE adapter at startup. Replay steps through probes captured from the completed run and preserves its reported time and attempt count. Long backtracking runs sample the progress stream. See the [HTTP contract](../contracts/crack-safe/README.md) for the event format.
+The mission UI calls the `CrackSafeGateway` port with the selected algorithm. Angular injects the HTTP/SSE adapter at startup. **Both** calls the gateway once per algorithm with the same combination and shows separate guesses, progress bars, and results side by side. Replay appears automatically with a slider and step controls for each recorded trace. Long backtracking runs sample the progress stream and retain the exact final attempt count. See the [HTTP contract](../contracts/crack-safe/README.md) for the event format.
 
 ## Scene artwork
 

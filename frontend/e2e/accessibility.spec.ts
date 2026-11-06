@@ -8,29 +8,41 @@ async function checkAccessibility(page: Page, scene: string): Promise<void> {
   expect(violations, scene).toEqual([]);
 }
 
-test('story, decoder, source dialog, and debrief pass the automated accessibility checks', async ({
+test('story, decoder, source dialog, and automatic replay pass the automated accessibility checks', async ({
   page,
 }) => {
+  const requests: unknown[] = [];
+  let releaseBacktracking!: () => void;
+  const backtrackingReady = new Promise<void>((resolve) => {
+    releaseBacktracking = resolve;
+  });
   await page.route('**/api/crack_safe/**', async (route) => {
     if (route.request().method() === 'GET') {
+      const algorithm = new URL(route.request().url()).pathname.split('/').at(-2);
       await route.fulfill({
         json: {
-          algorithm: 'backtracking',
-          source: 'def crack_backtracking_attempts(port):\n    yield from search(port)\n',
+          algorithm,
+          source: `def crack_${algorithm}_attempts(port):\n    yield from search(port)\n`,
         },
       });
       return;
     }
-    const progress = { attempts: 1, current_combination: '0000000000', time_taken: 0.01 };
-    const result = {
-      attempts: 1,
-      cracked_combination: '0000000000',
+    const request = route.request().postDataJSON();
+    requests.push(request);
+    const attempts = request.algorithm === 'positional' ? 2 : 3;
+    if (request.algorithm === 'backtracking') await backtrackingReady;
+    const target = '0000000000';
+    const probes = Array.from({ length: attempts }, (_, index) => ({
+      attempts: index + 1,
+      current_combination: index === attempts - 1 ? target : String(index + attempts).repeat(10),
       time_taken: 0.01,
-      success: true,
-    };
+    }));
+    const result = { attempts, cracked_combination: target, time_taken: 0.01, success: true };
     await route.fulfill({
       contentType: 'text/event-stream',
-      body: `event: progress\ndata: ${JSON.stringify(progress)}\n\nevent: result\ndata: ${JSON.stringify(result)}\n\n`,
+      body:
+        probes.map((probe) => `event: progress\ndata: ${JSON.stringify(probe)}\n\n`).join('') +
+        `event: result\ndata: ${JSON.stringify(result)}\n\n`,
     });
   });
 
@@ -43,11 +55,14 @@ test('story, decoder, source dialog, and debrief pass the automated accessibilit
   await expect(page.getByRole('heading', { name: 'Acoustic decoder' })).toBeFocused();
   await checkAccessibility(page, 'Decoder');
 
-  await page.getByText('Backtracking', { exact: true }).click();
+  await page.getByRole('button', { name: 'Both', exact: true }).click();
   const showAlgorithm = page.getByRole('button', { name: 'Show algorithm' });
   await showAlgorithm.click();
-  const dialog = page.getByRole('dialog', { name: 'Backtracking · Python' });
-  await expect(dialog.locator('pre code')).toContainText('def crack_backtracking_attempts');
+  const dialog = page.getByRole('dialog', { name: 'Both · Python' });
+  await expect(dialog.locator('pre code')).toHaveText([
+    /def crack_positional_attempts/,
+    /def crack_backtracking_attempts/,
+  ]);
   await expect(dialog.getByText(/counting repeats regardless of position/)).toBeVisible();
   await checkAccessibility(page, 'Algorithm dialog');
   await page.keyboard.press('Escape');
@@ -61,21 +76,50 @@ test('story, decoder, source dialog, and debrief pass the automated accessibilit
   await checkAccessibility(page, 'Invalid combination');
   await combination.fill('0000000000');
   await page.getByRole('button', { name: 'Crack safe' }).click();
+  const positionalBar = page.getByRole('progressbar', { name: 'Positional matching progress' });
+  const backtrackingBar = page.getByRole('progressbar', { name: 'Backtracking progress' });
+  await expect(positionalBar).toHaveAttribute('aria-valuenow', '100');
+  await expect(
+    page.getByRole('group', { name: 'Backtracking', exact: true }).getByText('Live'),
+  ).toBeVisible();
+  await expect(backtrackingBar).not.toHaveAttribute('aria-valuenow', /./);
+  releaseBacktracking();
+  await expect(backtrackingBar).toHaveAttribute('aria-valuenow', '100');
   await expect(page.getByText('Matches target')).toBeVisible();
-  await page.getByRole('button', { name: 'Replay the decode' }).click();
-  await expect(page.getByText('Step 1 of 1')).toBeVisible();
-  await checkAccessibility(page, 'Replay');
-  await page.getByRole('button', { name: 'Recover the dossier' }).click();
-  await expect(page.getByRole('heading', { name: 'Dossier recovered.' })).toBeFocused();
-  await checkAccessibility(page, 'Debrief');
-  await page.getByRole('button', { name: 'Try the other method' }).click();
-  const comparison = page.getByRole('table', { name: 'Method comparison' });
-  await expect(comparison.getByRole('columnheader', { name: 'Positional matching' })).toBeVisible();
-  await expect(comparison.getByRole('columnheader', { name: 'Backtracking' })).toBeVisible();
-  await checkAccessibility(page, 'Comparison debrief');
+  expect(requests).toEqual([
+    { actual_combination: '0000000000', algorithm: 'positional' },
+    { actual_combination: '0000000000', algorithm: 'backtracking' },
+  ]);
+  const comparison = page.getByRole('region', { name: 'Method comparison' });
+  for (const method of ['Positional matching', 'Backtracking']) {
+    await expect(
+      comparison.getByRole('group', { name: method }).getByText('0000000000'),
+    ).toBeVisible();
+  }
+
+  const replay = page.getByRole('region', { name: 'Decoder replay' });
+  const positionalSlider = replay.getByRole('slider', { name: 'Positional matching replay step' });
+  await expect(replay.getByText('Step 1 of 2')).toBeVisible();
+  await positionalSlider.press('End');
+  await expect(replay.getByText('Step 2 of 2')).toBeVisible();
+
+  await replay.getByRole('button', { name: 'Backtracking' }).click();
+  await expect(replay.getByText('Step 1 of 3')).toBeVisible();
+  await expect(replay.getByText('3333333333')).toBeVisible();
+  const backtrackingSlider = replay.getByRole('slider', { name: 'Backtracking replay step' });
+  await backtrackingSlider.press('End');
+  await expect(replay.getByText('Step 3 of 3')).toBeVisible();
+  await expect(replay.getByText('0000000000')).toBeVisible();
+  await replay.getByRole('button', { name: 'Previous' }).click();
+  await expect(backtrackingSlider).toHaveValue('2');
+  await expect(replay.getByText('4444444444')).toBeVisible();
+
+  await replay.getByRole('button', { name: 'Positional matching' }).click();
+  await expect(positionalSlider).toHaveValue('2');
+  await checkAccessibility(page, 'Comparison and replay');
 });
 
-test('the combination field filters typing and paste while preserving leading zeros', async ({
+test('the combination field caps typing and paste at ten digits and preserves leading zeros', async ({
   page,
   context,
 }) => {
@@ -87,17 +131,25 @@ test('the combination field filters typing and paste while preserving leading ze
   await combination.pressSequentially('0a8-0');
   await expect(combination).toHaveValue('080');
 
-  await page.evaluate(() => navigator.clipboard.writeText('0a8０0 0-666666'));
+  await combination.pressSequentially('0666666999');
+  await expect(combination).toHaveValue('0800666666');
+  await combination.press('End');
+  expect(await combination.evaluate((input) => input.scrollLeft)).toBe(0);
+
+  await page.evaluate(() => navigator.clipboard.writeText('0a8０0 0-666666-777'));
   await combination.press('ControlOrMeta+A');
   await combination.press('ControlOrMeta+V');
   await expect(combination).toHaveValue('0800666666');
 });
 
-test('both method buttons fit at narrow phone and tablet widths', async ({ page }) => {
+test('method buttons and dual telemetry fit at narrow phone and tablet widths', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Skip to decoder' }).click();
   const method = page.getByRole('group', { name: 'Search method' });
-  await expect(method.getByRole('button')).toHaveCount(2);
+  await expect(method.getByRole('button')).toHaveCount(3);
+  await method.getByRole('button', { name: 'Both' }).click();
+  const positional = page.getByRole('progressbar', { name: 'Positional matching progress' });
+  const backtracking = page.getByRole('progressbar', { name: 'Backtracking progress' });
 
   for (const width of [320, 641, 719]) {
     await page.setViewportSize({ width, height: 820 });
@@ -113,5 +165,9 @@ test('both method buttons fit at narrow phone and tablet widths', async ({ page 
       });
     });
     expect(fits, `Search method fits at ${width}px`).toBe(true);
+    const left = (await positional.boundingBox())!;
+    const right = (await backtracking.boundingBox())!;
+    expect(left.x + left.width).toBeLessThan(right.x);
+    expect(left.y).toBeCloseTo(right.y, 0);
   }
 });

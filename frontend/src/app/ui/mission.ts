@@ -12,11 +12,11 @@ import {
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule, type MatDialogRef } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSliderModule } from '@angular/material/slider';
 import { CRACK_SAFE_GATEWAY } from '../crack-safe.token';
 import {
+  COMBINATION_LENGTH,
   isCombination,
   type CrackAlgorithm,
   type CrackProgress,
@@ -24,27 +24,23 @@ import {
 } from '../application/crack-safe';
 
 type MissionPhase = 'ready' | 'running' | 'opened' | 'error';
-type MissionScene = 'briefing' | 'suite' | 'decoder' | 'dossier';
-type AlgorithmSource = { status: 'loading' | 'error' } | { status: 'ready'; code: string };
-type MethodResult = { algorithm: CrackAlgorithm; result: CrackResult };
+type MissionScene = 'briefing' | 'suite' | 'decoder';
+type SearchMode = CrackAlgorithm | 'both';
+type AlgorithmSource =
+  | { status: 'loading' | 'error' }
+  | { status: 'ready'; entries: { algorithm: CrackAlgorithm; code: string }[] };
+type CompletedRun = { algorithm: CrackAlgorithm; result: CrackResult; probes: CrackProgress[] };
 
 const chapters: Record<MissionScene, string> = {
   briefing: '01 / Briefing',
   suite: '02 / The suite',
   decoder: '03 / The safe',
-  dossier: '04 / Debrief',
 };
 
 @Component({
   selector: 'app-mission',
   standalone: true,
-  imports: [
-    MatButtonModule,
-    MatDialogModule,
-    MatFormFieldModule,
-    MatInputModule,
-    MatProgressBarModule,
-  ],
+  imports: [MatButtonModule, MatDialogModule, MatProgressBarModule, MatSliderModule],
   templateUrl: './mission.html',
   styleUrls: ['./mission.css', './experience.css'],
 })
@@ -59,66 +55,91 @@ export class Mission {
   readonly scene = signal<MissionScene>('briefing');
   readonly chapter = computed(() => chapters[this.scene()]);
   private readonly sceneTitle = viewChild<ElementRef<HTMLElement>>('sceneTitle');
-  private readonly firstMethod = signal<MethodResult | null>(null);
   readonly target = signal('0800666666');
-  readonly algorithm = signal<CrackAlgorithm>('positional');
-  readonly methodNames: Record<CrackAlgorithm, string> = {
+  readonly algorithm = signal<SearchMode>('positional');
+  readonly searchModes: SearchMode[] = ['positional', 'backtracking', 'both'];
+  readonly methodNames: Record<SearchMode, string> = {
     positional: 'Positional matching',
     backtracking: 'Backtracking',
+    both: 'Both',
   };
   readonly algorithmSource = signal<AlgorithmSource>({ status: 'loading' });
   readonly invalidTarget = computed(() => !isCombination(this.target()));
   readonly phase = signal<MissionPhase>('ready');
   readonly error = signal('');
-  readonly trace = signal<CrackProgress[]>([]);
-  readonly result = signal<CrackResult | null>(null);
-  readonly replayIndex = signal<number | null>(null);
-  private readonly replayTrigger = viewChild<ElementRef<HTMLButtonElement>>('replayTrigger');
+  readonly runs = signal<CompletedRun[]>([]);
+  private readonly liveRun = signal<{
+    algorithm: CrackAlgorithm;
+    progress: CrackProgress | null;
+  } | null>(null);
+  private readonly replayPositions = signal<Partial<Record<CrackAlgorithm, number>>>({});
+  private readonly replayAlgorithm = signal<CrackAlgorithm | null>(null);
   private readonly algorithmDialog = viewChild<TemplateRef<unknown>>('algorithmDialog');
-  readonly lastProgress = computed(() => this.trace().at(-1));
+  private readonly selectedAlgorithms = computed<CrackAlgorithm[]>(() => {
+    const mode = this.algorithm();
+    return mode === 'both' ? ['positional', 'backtracking'] : [mode];
+  });
   readonly algorithmLabel = computed(() => this.methodNames[this.algorithm()]);
-  readonly comparison = computed(() => {
-    const first = this.firstMethod();
-    const result = this.result();
-    if (!first || !result) return null;
-
-    const second = { algorithm: this.algorithm(), result };
-    return first.algorithm === 'positional' ? [first, second] : [second, first];
+  readonly result = computed(() =>
+    this.phase() === 'running' ? null : (this.runs().at(-1)?.result ?? null),
+  );
+  readonly replayRuns = computed(() =>
+    this.phase() === 'running' ? [] : this.runs().filter((run) => run.probes.length > 0),
+  );
+  readonly replayRun = computed(() => {
+    const runs = this.replayRuns();
+    return runs.find((run) => run.algorithm === this.replayAlgorithm()) ?? runs[0];
+  });
+  readonly replayIndex = computed(() => {
+    const run = this.replayRun();
+    return run ? (this.replayPositions()[run.algorithm] ?? 0) : 0;
   });
   readonly replayIsSampled = computed(() => {
-    const result = this.result();
-    return result !== null && result.attempts > this.trace().length;
+    const run = this.replayRun();
+    return !!run && run.result.attempts > run.probes.length;
   });
-  readonly currentGuess = computed(
-    () =>
-      this.result()?.crackedCombination ?? this.lastProgress()?.currentCombination ?? '——————————',
-  );
-  readonly guessDigits = computed(() => Array.from(this.currentGuess()));
-  readonly attemptCount = computed(
-    () => this.result()?.attempts ?? this.lastProgress()?.attempts ?? 0,
-  );
-  readonly elapsedTime = computed(() => {
-    const seconds = this.result()?.timeTaken ?? this.lastProgress()?.timeTaken;
-    return seconds === undefined ? '—' : this.formatTime(seconds);
-  });
-  readonly replayAttempt = computed(() => {
-    const index = this.replayIndex();
-    return index === null ? null : this.trace()[index];
+  readonly telemetry = computed(() => {
+    const phase = this.phase();
+    const runs = this.runs();
+    const liveRun = this.liveRun();
+    return this.selectedAlgorithms().map((algorithm) => {
+      const result = runs.find((run) => run.algorithm === algorithm)?.result;
+      const isActive = liveRun?.algorithm === algorithm;
+      const progress = isActive ? liveRun.progress : null;
+      return {
+        algorithm,
+        status: result
+          ? 'Opened'
+          : isActive
+            ? phase === 'error'
+              ? 'Interrupted'
+              : 'Live'
+            : phase === 'running'
+              ? 'Queued'
+              : 'Standby',
+        guess: result?.crackedCombination ?? progress?.currentCombination ?? '—',
+        attempts: result?.attempts ?? progress?.attempts ?? 0,
+        seconds: result?.timeTaken ?? progress?.timeTaken,
+      };
+    });
   });
   readonly radioMessage = computed(() => {
     switch (this.phase()) {
       case 'running':
         return 'Decoder attached. Listening to the lock.';
       case 'opened':
-        return 'We’re in. The dossier is secure.';
+        return 'We’re in. The safe is open.';
       case 'error':
-        return 'The connection broke. Standing by for another attempt.';
+        return 'The decode stopped. Ready to try again.';
       default:
         return 'Control, I’m at the safe. Ready when you are.';
     }
   });
   readonly telemetryNote = computed(() => {
-    if (this.algorithm() === 'backtracking') {
+    const algorithm = this.liveRun()?.algorithm ?? this.algorithm();
+    if (algorithm === 'both')
+      return 'Runs positional matching, then backtracking on the same code.';
+    if (algorithm === 'backtracking') {
       return this.phase() === 'running'
         ? 'The decoder is checking digit counts and candidate orders.'
         : 'Count repeated digits, then test each unique ordering until the safe opens.';
@@ -137,39 +158,34 @@ export class Mission {
   }
 
   goToScene(scene: MissionScene): void {
-    if (this.phase() === 'running' || (scene === 'dossier' && !this.result())) return;
+    if (this.phase() === 'running') return;
 
-    this.replayIndex.set(null);
+    if (scene === 'suite') this.resetRun();
     this.scene.set(scene);
     afterNextRender(() => this.sceneTitle()?.nativeElement.focus(), { injector: this.injector });
-  }
-
-  restartMission(): void {
-    this.firstMethod.set(null);
-    this.resetRun();
-    this.goToScene('suite');
   }
 
   updateTarget(event: Event): void {
     const input = event.target as HTMLInputElement;
     const raw = input.value;
-    const digits = raw.replace(/[^0-9]/g, '');
+    const digits = raw.replace(/[^0-9]/g, '').slice(0, COMBINATION_LENGTH);
     if (digits !== raw) {
-      const caret = raw.slice(0, input.selectionStart ?? raw.length).replace(/[^0-9]/g, '').length;
+      const caret = Math.min(
+        digits.length,
+        raw.slice(0, input.selectionStart ?? raw.length).replace(/[^0-9]/g, '').length,
+      );
       input.value = digits;
       input.setSelectionRange(caret, caret);
     }
     if (digits === this.target()) return;
 
     this.target.set(digits);
-    this.firstMethod.set(null);
     this.resetRun();
   }
 
-  updateAlgorithm(selection: CrackAlgorithm): void {
+  updateAlgorithm(selection: SearchMode): void {
     if (this.phase() === 'running' || selection === this.algorithm()) return;
     this.algorithm.set(selection);
-    this.firstMethod.set(null);
     this.resetRun();
   }
 
@@ -188,8 +204,13 @@ export class Mission {
     });
 
     try {
-      const code = await this.gateway.readAlgorithm(this.algorithm(), request.signal);
-      if (!request.signal.aborted) this.algorithmSource.set({ status: 'ready', code });
+      const entries = await Promise.all(
+        this.selectedAlgorithms().map(async (algorithm) => ({
+          algorithm,
+          code: await this.gateway.readAlgorithm(algorithm, request.signal),
+        })),
+      );
+      if (!request.signal.aborted) this.algorithmSource.set({ status: 'ready', entries });
     } catch {
       if (!request.signal.aborted) this.algorithmSource.set({ status: 'error' });
     } finally {
@@ -199,8 +220,9 @@ export class Mission {
 
   randomize(): void {
     if (this.phase() === 'running') return;
-    this.target.set(Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join(''));
-    this.firstMethod.set(null);
+    this.target.set(
+      Array.from({ length: COMBINATION_LENGTH }, () => Math.floor(Math.random() * 10)).join(''),
+    );
     this.resetRun();
   }
 
@@ -214,51 +236,35 @@ export class Mission {
       return;
     }
 
-    const retryingComparison = this.phase() === 'error' && this.firstMethod() !== null;
-    if (!retryingComparison) this.firstMethod.set(null);
-    await this.runDecode(submittedTarget, retryingComparison);
-  }
-
-  async tryOtherMethod(): Promise<void> {
-    const result = this.result();
-    if (!result || this.phase() !== 'opened' || this.firstMethod() || this.scene() !== 'dossier') {
-      return;
-    }
-
-    const algorithm = this.algorithm();
-    this.firstMethod.set({ algorithm, result });
-    this.algorithm.set(algorithm === 'positional' ? 'backtracking' : 'positional');
-    this.target.set(result.crackedCombination);
-    this.goToScene('decoder');
-    await this.runDecode(result.crackedCombination, true);
-  }
-
-  private async runDecode(submittedTarget: string, comparing: boolean): Promise<void> {
     this.resetRun();
     this.phase.set('running');
     const controller = new AbortController();
     this.controller = controller;
 
     try {
-      const result = await this.gateway.run(
-        submittedTarget,
-        this.algorithm(),
-        (progress) => {
-          if (this.controller === controller && !controller.signal.aborted) {
-            this.trace.update((attempts) => [...attempts, progress]);
-          }
-        },
-        controller.signal,
-      );
+      for (const algorithm of this.selectedAlgorithms()) {
+        this.liveRun.set({ algorithm, progress: null });
+        const probes: CrackProgress[] = [];
+        const result = await this.gateway.run(
+          submittedTarget,
+          algorithm,
+          (progress) => {
+            if (!controller.signal.aborted) {
+              probes.push(progress);
+              this.liveRun.set({ algorithm, progress });
+            }
+          },
+          controller.signal,
+        );
 
-      if (controller.signal.aborted) return;
-      if (!result.success || result.crackedCombination !== submittedTarget) {
-        throw new Error('The returned combination did not match the target. Try again.');
+        if (controller.signal.aborted) return;
+        if (!result.success || result.crackedCombination !== submittedTarget) {
+          throw new Error('The returned combination did not match the target. Try again.');
+        }
+
+        this.runs.update((runs) => [...runs, { algorithm, result, probes }]);
       }
-
-      this.result.set(result);
       this.phase.set('opened');
-      if (comparing) this.goToScene('dossier');
     } catch (error) {
       if (controller.signal.aborted) return;
       this.error.set(
@@ -270,24 +276,20 @@ export class Mission {
     }
   }
 
-  toggleReplay(): void {
-    if (this.replayIndex() !== null) {
-      this.closeReplay();
-    } else if (this.result() && this.trace().length) {
-      this.replayIndex.set(0);
-    }
-  }
-
-  closeReplay(): void {
-    this.replayIndex.set(null);
-    this.replayTrigger()?.nativeElement.focus();
+  selectReplay(algorithm: CrackAlgorithm): void {
+    this.replayAlgorithm.set(algorithm);
   }
 
   moveReplay(direction: number): void {
-    const index = this.replayIndex();
-    if (index !== null) {
-      this.replayIndex.set(Math.max(0, Math.min(this.trace().length - 1, index + direction)));
-    }
+    this.seekReplay(this.replayIndex() + direction);
+  }
+
+  seekReplay(index: number): void {
+    const run = this.replayRun();
+    if (!run) return;
+    const next = Math.max(0, Math.min(run.probes.length - 1, index));
+    if (next === this.replayIndex()) return;
+    this.replayPositions.update((positions) => ({ ...positions, [run.algorithm]: next }));
   }
 
   formatTime(seconds: number): string {
@@ -297,8 +299,9 @@ export class Mission {
   private resetRun(): void {
     this.phase.set('ready');
     this.error.set('');
-    this.trace.set([]);
-    this.result.set(null);
-    this.replayIndex.set(null);
+    this.liveRun.set(null);
+    this.runs.set([]);
+    this.replayAlgorithm.set(null);
+    this.replayPositions.set({});
   }
 }
