@@ -22,7 +22,11 @@ npm ci
 npm start
 ```
 
-Open [http://localhost:4200](http://localhost:4200). The Angular dev server proxies `/api/` requests to Flask at `127.0.0.1:5001`. For a deployed build, route `/api/` to Flask on the same origin as the UI.
+Open [http://localhost:4200](http://localhost:4200). The Angular dev server proxies `/api/` requests to Flask at `127.0.0.1:5001`.
+
+## Deploy on Vercel
+
+Use the repository root as the project root. The build in `vercel.json` publishes Angular’s browser output from `frontend/dist/safe-cracker/browser`. The same configuration routes `/api/` requests to the Flask function in `api/index.py`, including the live event stream.
 
 ## Verify
 
