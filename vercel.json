@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
+  "installCommand": "pip install -r requirements.txt",
+  "buildCommand": "npm ci --prefix frontend && npm run build --prefix frontend && mkdir -p public && cp -R frontend/dist/safe-cracker/browser/. public/"
+}
