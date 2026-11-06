@@ -184,15 +184,16 @@
               <mat-dialog-content>
                 @if (algorithm() === 'positional') {
                   <p>
-                    Start with ten zeros and change one position at a time. A higher score confirms
-                    the new digit, a lower score confirms the original zero, and a tie means try
-                    another digit.
+                    <code>sound_tool</code> counts digits that are correct and in the correct
+                    position. The solver starts with ten zeros and changes one digit at a time,
+                    using changes in the score to identify the correct digit.
                   </p>
                 } @else {
                   <p>
-                    Probe ten repeated-digit strings to learn the counts. Then build each distinct
-                    ordering from the remaining counts, restoring a count on backtrack. The
-                    safe-open signal ends the search.
+                    <code>sound_tool</code> reports how many digits the guess shares with the
+                    secret, counting repeats regardless of position. The solver learns the digit
+                    counts, tries distinct arrangements, and checks each complete guess with a
+                    separate yes/no safe-open signal.
                   </p>
                 }
                 @if (algorithmSource(); as source) {
