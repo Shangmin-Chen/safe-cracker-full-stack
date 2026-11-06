@@ -11,7 +11,6 @@ import {
   viewChild,
 } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog, MatDialogModule, type MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -27,6 +26,7 @@ import {
 type MissionPhase = 'ready' | 'running' | 'opened' | 'error';
 type MissionScene = 'briefing' | 'suite' | 'decoder' | 'dossier';
 type AlgorithmSource = { status: 'loading' | 'error' } | { status: 'ready'; code: string };
+type MethodResult = { algorithm: CrackAlgorithm; result: CrackResult };
 
 const chapters: Record<MissionScene, string> = {
   briefing: '01 / Briefing',
@@ -40,7 +40,6 @@ const chapters: Record<MissionScene, string> = {
   standalone: true,
   imports: [
     MatButtonModule,
-    MatButtonToggleModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
@@ -60,8 +59,13 @@ export class Mission {
   readonly scene = signal<MissionScene>('briefing');
   readonly chapter = computed(() => chapters[this.scene()]);
   private readonly sceneTitle = viewChild<ElementRef<HTMLElement>>('sceneTitle');
+  private readonly firstMethod = signal<MethodResult | null>(null);
   readonly target = signal('0800666666');
   readonly algorithm = signal<CrackAlgorithm>('positional');
+  readonly methodNames: Record<CrackAlgorithm, string> = {
+    positional: 'Positional matching',
+    backtracking: 'Backtracking',
+  };
   readonly algorithmSource = signal<AlgorithmSource>({ status: 'loading' });
   readonly invalidTarget = computed(() => !isCombination(this.target()));
   readonly phase = signal<MissionPhase>('ready');
@@ -72,9 +76,15 @@ export class Mission {
   private readonly replayTrigger = viewChild<ElementRef<HTMLButtonElement>>('replayTrigger');
   private readonly algorithmDialog = viewChild<TemplateRef<unknown>>('algorithmDialog');
   readonly lastProgress = computed(() => this.trace().at(-1));
-  readonly algorithmLabel = computed(() =>
-    this.algorithm() === 'positional' ? 'Positional matching' : 'Backtracking',
-  );
+  readonly algorithmLabel = computed(() => this.methodNames[this.algorithm()]);
+  readonly comparison = computed(() => {
+    const first = this.firstMethod();
+    const result = this.result();
+    if (!first || !result) return null;
+
+    const second = { algorithm: this.algorithm(), result };
+    return first.algorithm === 'positional' ? [first, second] : [second, first];
+  });
   readonly replayIsSampled = computed(() => {
     const result = this.result();
     return result !== null && result.attempts > this.trace().length;
@@ -135,6 +145,7 @@ export class Mission {
   }
 
   restartMission(): void {
+    this.firstMethod.set(null);
     this.resetRun();
     this.goToScene('suite');
   }
@@ -151,12 +162,14 @@ export class Mission {
     if (digits === this.target()) return;
 
     this.target.set(digits);
+    this.firstMethod.set(null);
     this.resetRun();
   }
 
   updateAlgorithm(selection: CrackAlgorithm): void {
     if (this.phase() === 'running' || selection === this.algorithm()) return;
     this.algorithm.set(selection);
+    this.firstMethod.set(null);
     this.resetRun();
   }
 
@@ -187,6 +200,7 @@ export class Mission {
   randomize(): void {
     if (this.phase() === 'running') return;
     this.target.set(Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join(''));
+    this.firstMethod.set(null);
     this.resetRun();
   }
 
@@ -200,6 +214,26 @@ export class Mission {
       return;
     }
 
+    const retryingComparison = this.phase() === 'error' && this.firstMethod() !== null;
+    if (!retryingComparison) this.firstMethod.set(null);
+    await this.runDecode(submittedTarget, retryingComparison);
+  }
+
+  async tryOtherMethod(): Promise<void> {
+    const result = this.result();
+    if (!result || this.phase() !== 'opened' || this.firstMethod() || this.scene() !== 'dossier') {
+      return;
+    }
+
+    const algorithm = this.algorithm();
+    this.firstMethod.set({ algorithm, result });
+    this.algorithm.set(algorithm === 'positional' ? 'backtracking' : 'positional');
+    this.target.set(result.crackedCombination);
+    this.goToScene('decoder');
+    await this.runDecode(result.crackedCombination, true);
+  }
+
+  private async runDecode(submittedTarget: string, comparing: boolean): Promise<void> {
     this.resetRun();
     this.phase.set('running');
     const controller = new AbortController();
@@ -224,6 +258,7 @@ export class Mission {
 
       this.result.set(result);
       this.phase.set('opened');
+      if (comparing) this.goToScene('dossier');
     } catch (error) {
       if (controller.signal.aborted) return;
       this.error.set(

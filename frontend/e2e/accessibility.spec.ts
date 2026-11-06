@@ -67,6 +67,11 @@ test('story, decoder, source dialog, and debrief pass the automated accessibilit
   await page.getByRole('button', { name: 'Recover the dossier' }).click();
   await expect(page.getByRole('heading', { name: 'Dossier recovered.' })).toBeFocused();
   await checkAccessibility(page, 'Debrief');
+  await page.getByRole('button', { name: 'Try the other method' }).click();
+  const comparison = page.getByRole('table', { name: 'Method comparison' });
+  await expect(comparison.getByRole('columnheader', { name: 'Positional matching' })).toBeVisible();
+  await expect(comparison.getByRole('columnheader', { name: 'Backtracking' })).toBeVisible();
+  await checkAccessibility(page, 'Comparison debrief');
 });
 
 test('the combination field filters typing and paste while preserving leading zeros', async ({
@@ -85,4 +90,27 @@ test('the combination field filters typing and paste while preserving leading ze
   await combination.press('ControlOrMeta+A');
   await combination.press('ControlOrMeta+V');
   await expect(combination).toHaveValue('0800666666');
+});
+
+test('both method buttons fit at narrow phone and tablet widths', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Skip to decoder' }).click();
+  const method = page.getByRole('group', { name: 'Search method' });
+  await expect(method.getByRole('button')).toHaveCount(2);
+
+  for (const width of [320, 641, 719]) {
+    await page.setViewportSize({ width, height: 820 });
+    const fits = await method.evaluate((group) => {
+      const bounds = group.getBoundingClientRect();
+      return Array.from(group.querySelectorAll('button')).every((button) => {
+        const rect = button.getBoundingClientRect();
+        return (
+          rect.left >= bounds.left &&
+          rect.right <= bounds.right + 1 &&
+          button.scrollWidth <= button.clientWidth + 1
+        );
+      });
+    });
+    expect(fits, `Search method fits at ${width}px`).toBe(true);
+  }
 });

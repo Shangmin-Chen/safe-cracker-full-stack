@@ -330,6 +330,35 @@
   background: #8b503c;
 }
 
+.method-comparison {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.method-comparison caption {
+  padding-bottom: 8px;
+  font-weight: 700;
+  text-align: left;
+}
+.method-comparison :is(th, td) {
+  padding: 8px 5px;
+  border-bottom: 1px solid #b39d7d;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.method-comparison :is(th, td):first-child {
+  width: 28%;
+}
+.method-comparison td {
+  font-family: ui-monospace, monospace;
+}
+.dossier-sheet .comparison-note {
+  margin-top: 10px;
+  color: #61523e;
+  font-size: 12px;
+}
+
 .briefing,
 .scene-transmission,
 .mission-shell,
@@ -348,6 +377,12 @@
 }
 
 @media (max-width: 640px) {
+  .method-comparison {
+    font-size: 12px;
+  }
+  .method-comparison :is(th, td) {
+    padding-inline: 3px;
+  }
   .story-header {
     padding-block: 19px;
   }

@@ -39,8 +39,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 button:disabled { cursor: default; opacity: .55; }
 .algorithm-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
 .algorithm-heading .input-label { margin: 0; }
-.algorithm-row { display: flex; width: 100%; }
-.algorithm-row mat-button-toggle { flex: 1; }
+.algorithm-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.algorithm-row button { min-width: 0; min-height: 44px; padding-inline: 8px; white-space: normal; line-height: 1.25; }
 .algorithm-code { overflow: auto; margin: 14px 0 0; padding: 16px; background: #201b17; color: #f3e8cc; font: 13px/1.6 ui-monospace, monospace; tab-size: 4; }
 .error-message { margin: 12px 0 0; color: #9b3028; font-size: 13px; line-height: 1.45; }
 .crack-button { width: 100%; margin-top: 18px; }

@@ -2,6 +2,14 @@
 
 `POST /api/crack_safe/` and `POST /api/cracksafe/` take a JSON object with `actual_combination` as a string of ten ASCII digits. A combination can start with zero. `algorithm` accepts `"positional"` (the default) or `"backtracking"`.
 
+The Angular client sends both fields for every run. To select backtracking, send:
+
+```json
+{"actual_combination":"0800666666","algorithm":"backtracking"}
+```
+
+Use `"positional"` as the algorithm value to select positional matching explicitly. Existing callers can omit `algorithm` to use the positional default.
+
 With `Accept: text/event-stream`, a successful request streams `progress` events and ends with one `result` event. For example, a run with an all-zero target can produce these frames:
 
 ```text

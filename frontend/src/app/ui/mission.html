@@ -131,16 +131,34 @@
                   Show algorithm
                 </button>
               </div>
-              <mat-button-toggle-group
-                class="algorithm-row"
-                aria-labelledby="algorithm-label"
-                [value]="algorithm()"
-                [disabled]="phase() === 'running'"
-                (change)="updateAlgorithm($event.value)"
-              >
-                <mat-button-toggle value="positional">Positional matching</mat-button-toggle>
-                <mat-button-toggle value="backtracking">Backtracking</mat-button-toggle>
-              </mat-button-toggle-group>
+              <div class="algorithm-row" role="group" aria-labelledby="algorithm-label">
+                <button
+                  [matButton]="algorithm() === 'positional' ? 'tonal' : 'outlined'"
+                  type="button"
+                  value="positional"
+                  [attr.aria-pressed]="algorithm() === 'positional'"
+                  [disabled]="phase() === 'running'"
+                  (click)="updateAlgorithm('positional')"
+                >
+                  @if (algorithm() === 'positional') {
+                    <span aria-hidden="true">✓ </span>
+                  }
+                  Positional matching
+                </button>
+                <button
+                  [matButton]="algorithm() === 'backtracking' ? 'tonal' : 'outlined'"
+                  type="button"
+                  value="backtracking"
+                  [attr.aria-pressed]="algorithm() === 'backtracking'"
+                  [disabled]="phase() === 'running'"
+                  (click)="updateAlgorithm('backtracking')"
+                >
+                  @if (algorithm() === 'backtracking') {
+                    <span aria-hidden="true">✓ </span>
+                  }
+                  Backtracking
+                </button>
+              </div>
               @if (error()) {
                 <p id="input-error" class="error-message" role="alert">{{ error() }}</p>
               }
@@ -314,6 +332,7 @@
     }
     @case ('dossier') {
       @if (result(); as report) {
+        @let methods = comparison();
         <section class="dossier-scene" aria-labelledby="dossier-title">
           <article class="dossier-sheet">
             <p class="story-label">Field report <span>·</span> Meridian Hotel</p>
@@ -326,20 +345,57 @@
                 <dt>Recovered code</dt>
                 <dd>{{ report.crackedCombination }}</dd>
               </div>
-              <div>
-                <dt>Search method</dt>
-                <dd>{{ algorithmLabel() }}</dd>
-              </div>
-              <div>
-                <dt>Attempts</dt>
-                <dd>{{ report.attempts }}</dd>
-              </div>
-              <div>
-                <dt>Elapsed</dt>
-                <dd>{{ elapsedTime() }} s</dd>
-              </div>
+              @if (!methods) {
+                <div>
+                  <dt>Search method</dt>
+                  <dd>{{ algorithmLabel() }}</dd>
+                </div>
+                <div>
+                  <dt>Attempts</dt>
+                  <dd>{{ report.attempts }}</dd>
+                </div>
+                <div>
+                  <dt>Elapsed</dt>
+                  <dd>{{ elapsedTime() }} s</dd>
+                </div>
+              }
             </dl>
+            @if (methods) {
+              <table class="method-comparison">
+                <caption>
+                  Method comparison
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Measure</th>
+                    @for (method of methods; track method.algorithm) {
+                      <th scope="col">{{ methodNames[method.algorithm] }}</th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Attempts</th>
+                    @for (method of methods; track method.algorithm) {
+                      <td>{{ method.result.attempts }}</td>
+                    }
+                  </tr>
+                  <tr>
+                    <th scope="row">Elapsed</th>
+                    @for (method of methods; track method.algorithm) {
+                      <td>{{ formatTime(method.result.timeTaken) }} s</td>
+                    }
+                  </tr>
+                </tbody>
+              </table>
+              <p class="comparison-note">The methods use different kinds of lock feedback.</p>
+            }
             <div class="story-actions">
+              @if (!methods) {
+                <button matButton="tonal" type="button" (click)="tryOtherMethod()">
+                  Try the other method
+                </button>
+              }
               <button class="story-action" type="button" (click)="restartMission()">
                 Run another drill <span aria-hidden="true">↗</span>
               </button>

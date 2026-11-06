@@ -100,6 +100,52 @@ describe('Mission', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('compares the same target with the other method and preserves the first result on retry', async () => {
+    const target = '0800666666';
+    const positional = {
+      attempts: 48,
+      crackedCombination: target,
+      timeTaken: 0.001,
+      success: true,
+    };
+    const backtracking = {
+      attempts: 235,
+      crackedCombination: target,
+      timeTaken: 0.002,
+      success: true,
+    };
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce(positional)
+      .mockRejectedValueOnce(new Error('Interrupted'))
+      .mockResolvedValueOnce(backtracking);
+    const fixture = setup(run);
+    const mission = fixture.componentInstance;
+    await mission.start(new Event('submit'));
+    mission.goToScene('dossier');
+
+    await mission.tryOtherMethod();
+    expect(mission.scene()).toBe('decoder');
+    expect(mission.phase()).toBe('error');
+    expect(mission.comparison()).toBeNull();
+
+    await mission.start(new Event('submit'));
+    fixture.detectChanges();
+    expect(run.mock.calls.map(([code, algorithm]) => [code, algorithm])).toEqual([
+      [target, 'positional'],
+      [target, 'backtracking'],
+      [target, 'backtracking'],
+    ]);
+    expect(mission.scene()).toBe('dossier');
+    expect(mission.comparison()).toEqual([
+      { algorithm: 'positional', result: positional },
+      { algorithm: 'backtracking', result: backtracking },
+    ]);
+    expect(fixture.nativeElement.querySelector('table')?.textContent).toContain('235');
+    mission.restartMission();
+    expect(mission.comparison()).toBeNull();
+  });
+
   it('rejects invalid input and reports connection failures without marking valid input invalid', async () => {
     const run = vi.fn().mockRejectedValue(new Error('The decoder could not connect.'));
     const fixture = setup(run);
@@ -142,9 +188,7 @@ describe('Mission', () => {
     const fixture = setup(run, true, readAlgorithm);
     const mission = fixture.componentInstance;
     const element = fixture.nativeElement as HTMLElement;
-    const backtracking = element.querySelector<HTMLButtonElement>(
-      'mat-button-toggle[value="backtracking"] button',
-    )!;
+    const backtracking = element.querySelector<HTMLButtonElement>('button[value="backtracking"]')!;
 
     expect(mission.algorithm()).toBe('positional');
     await mission.start(new Event('submit'));
@@ -241,7 +285,7 @@ describe('Mission', () => {
     expect(run).toHaveBeenCalledTimes(1);
     fixture.detectChanges();
     const button = fixture.nativeElement.querySelector(
-      'mat-button-toggle[value="backtracking"] button',
+      'button[value="backtracking"]',
     ) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     button.click();
