@@ -68,3 +68,21 @@ test('story, decoder, source dialog, and debrief pass the automated accessibilit
   await expect(page.getByRole('heading', { name: 'Dossier recovered.' })).toBeFocused();
   await checkAccessibility(page, 'Debrief');
 });
+
+test('the combination field filters typing and paste while preserving leading zeros', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Skip to decoder' }).click();
+  const combination = page.getByRole('textbox', { name: 'Vault combination' });
+  await combination.fill('');
+  await combination.pressSequentially('0a8-0');
+  await expect(combination).toHaveValue('080');
+
+  await page.evaluate(() => navigator.clipboard.writeText('0a8０0 0-666666'));
+  await combination.press('ControlOrMeta+A');
+  await combination.press('ControlOrMeta+V');
+  await expect(combination).toHaveValue('0800666666');
+});

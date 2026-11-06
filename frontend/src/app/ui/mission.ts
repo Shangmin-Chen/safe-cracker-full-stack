@@ -140,7 +140,17 @@ export class Mission {
   }
 
   updateTarget(event: Event): void {
-    this.target.set((event.target as HTMLInputElement).value);
+    const input = event.target as HTMLInputElement;
+    const raw = input.value;
+    const digits = raw.replace(/[^0-9]/g, '');
+    if (digits !== raw) {
+      const caret = raw.slice(0, input.selectionStart ?? raw.length).replace(/[^0-9]/g, '').length;
+      input.value = digits;
+      input.setSelectionRange(caret, caret);
+    }
+    if (digits === this.target()) return;
+
+    this.target.set(digits);
     this.resetRun();
   }
 
