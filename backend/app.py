@@ -7,14 +7,15 @@ from inspect import getsource
 from flask import Flask, Response, jsonify, request
 
 from .backtracking import crack_backtracking_attempts
-from .solver import Attempt, crack_attempts, is_valid_combination
-from .sound_tool import SimulatedMultisetSoundTool, SimulatedSoundTool
+from .domain import Attempt, is_valid_combination
+from .positional import crack_positional_attempts
+from .sound_tool import SimulatedMultisetSoundTool, SimulatedPositionalSoundTool
 
 
 app = Flask(__name__)
 
 ALGORITHM_IMPLEMENTATIONS = {
-    "positional": crack_attempts,
+    "positional": crack_positional_attempts,
     "backtracking": crack_backtracking_attempts,
 }
 
@@ -84,7 +85,7 @@ def crack_safe_endpoint() -> Response | tuple[Response, int]:
     if algorithm == "backtracking":
         attempts = crack_backtracking_attempts(SimulatedMultisetSoundTool(actual_combination))
     else:
-        attempts = crack_attempts(SimulatedSoundTool(actual_combination))
+        attempts = crack_positional_attempts(SimulatedPositionalSoundTool(actual_combination))
 
     if request.accept_mimetypes.best_match(
         ["application/json", "text/event-stream"]

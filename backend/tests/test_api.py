@@ -3,7 +3,7 @@ import unittest
 
 from backend.app import app
 from backend.app import _stream_attempts
-from backend.solver import Attempt
+from backend.domain import Attempt
 
 
 def decode_sse_events(response_text):

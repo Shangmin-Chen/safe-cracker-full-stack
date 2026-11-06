@@ -1,10 +1,10 @@
 import unittest
 
-from backend.solver import crack_attempts, crack_safe
-from backend.sound_tool import SimulatedSoundTool
+from backend.positional import crack_positional, crack_positional_attempts
+from backend.sound_tool import SimulatedPositionalSoundTool
 
 
-class FakeScorer:
+class FakePositionalScorer:
     def __init__(self, target: str) -> None:
         self.target = target
         self.guesses: list[str] = []
@@ -14,10 +14,10 @@ class FakeScorer:
         return sum(guess[index] == digit for index, digit in enumerate(self.target))
 
 
-class CrackSafeTests(unittest.TestCase):
+class PositionalTests(unittest.TestCase):
     def test_all_zero_combination_opens_on_initial_guess(self):
-        scorer = FakeScorer("0000000000")
-        result = crack_safe(scorer)
+        scorer = FakePositionalScorer("0000000000")
+        result = crack_positional(scorer)
 
         self.assertEqual(scorer.guesses, ["0000000000"])
         self.assertEqual(result.attempts, 1)
@@ -26,15 +26,15 @@ class CrackSafeTests(unittest.TestCase):
         self.assertGreaterEqual(result.time_taken, 0)
 
     def test_preserves_leading_zeroes(self):
-        result = crack_safe(FakeScorer("0800666666"))
+        result = crack_positional(FakePositionalScorer("0800666666"))
 
         self.assertTrue(result.opened)
         self.assertEqual(result.current_combination, "0800666666")
         self.assertLessEqual(result.attempts, 91)
 
     def test_all_nines_requires_at_most_91_attempts(self):
-        scorer = FakeScorer("9999999999")
-        result = crack_safe(scorer)
+        scorer = FakePositionalScorer("9999999999")
+        result = crack_positional(scorer)
 
         self.assertTrue(result.opened)
         self.assertEqual(result.current_combination, "9999999999")
@@ -42,8 +42,8 @@ class CrackSafeTests(unittest.TestCase):
         self.assertEqual(result.attempts, len(scorer.guesses))
 
     def test_attempt_stream_counts_each_probe_and_ends_at_the_secret(self):
-        scorer = FakeScorer("3141592653")
-        attempts = list(crack_attempts(scorer))
+        scorer = FakePositionalScorer("3141592653")
+        attempts = list(crack_positional_attempts(scorer))
 
         self.assertEqual(
             [attempt.current_combination for attempt in attempts], scorer.guesses
@@ -59,7 +59,7 @@ class CrackSafeTests(unittest.TestCase):
         self.assertTrue(attempts[-1].opened)
         self.assertTrue(all(not attempt.opened for attempt in attempts[:-1]))
 
-    def test_simulated_sound_tool_rejects_invalid_combinations(self):
+    def test_simulated_positional_sound_tool_rejects_invalid_combinations(self):
         invalid_values = (
             "123",
             "12345678901",
@@ -72,7 +72,7 @@ class CrackSafeTests(unittest.TestCase):
         for combination in invalid_values:
             with self.subTest(combination=combination):
                 with self.assertRaises(ValueError):
-                    SimulatedSoundTool(combination)
+                    SimulatedPositionalSoundTool(combination)
 
 
 if __name__ == "__main__":
