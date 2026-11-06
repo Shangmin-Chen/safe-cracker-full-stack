@@ -47,7 +47,8 @@ test('story, decoder, source dialog, and debrief pass the automated accessibilit
   const showAlgorithm = page.getByRole('button', { name: 'Show algorithm' });
   await showAlgorithm.click();
   const dialog = page.getByRole('dialog', { name: 'Backtracking · Python' });
-  await expect(dialog.locator('code')).toContainText('def crack_backtracking_attempts');
+  await expect(dialog.locator('pre code')).toContainText('def crack_backtracking_attempts');
+  await expect(dialog.getByText(/counting repeats regardless of position/)).toBeVisible();
   await checkAccessibility(page, 'Algorithm dialog');
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

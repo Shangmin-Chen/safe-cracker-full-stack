@@ -207,7 +207,9 @@ describe('Mission', () => {
     await mission.showAlgorithm();
     fixture.detectChanges();
     expect(readAlgorithm).toHaveBeenCalledWith('backtracking', expect.any(AbortSignal));
-    expect(document.querySelector('mat-dialog-container code')?.textContent).toBe(implementation);
+    expect(document.querySelector('mat-dialog-container pre code')?.textContent).toBe(
+      implementation,
+    );
 
     await mission.start(new Event('submit'));
     expect(run.mock.calls.map(([target, algorithm]) => [target, algorithm])).toEqual([
