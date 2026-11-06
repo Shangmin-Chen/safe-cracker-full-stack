@@ -26,7 +26,7 @@ Open [http://localhost:4200](http://localhost:4200). The Angular dev server prox
 
 ## Deploy on Vercel
 
-Use the repository root as the project root. The build in `vercel.json` publishes Angular’s browser output from `frontend/dist/safe-cracker/browser`. The Flask entrypoint in `pyproject.toml` handles same-origin `/api/` requests, including the live event stream.
+Use the repository root as the project root. The build in `vercel.json` publishes Angular’s browser output from `frontend/dist/safe-cracker/browser`. The same configuration routes `/api/` requests to the Flask function in `api/index.py`, including the live event stream.
 
 ## Verify
 

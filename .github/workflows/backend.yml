@@ -6,8 +6,8 @@ on:
   pull_request:
     paths:
       - 'backend/**'
+      - 'api/**'
       - 'Makefile'
-      - 'pyproject.toml'
       - 'requirements.txt'
       - 'vercel.json'
       - '.github/workflows/backend.yml'
