@@ -20,7 +20,10 @@ class BacktrackingScoringPort(Protocol):
 def crack_backtracking_attempts(
     score_guess: BacktrackingScoringPort,
 ) -> Iterator[Attempt]:
-    """Recover digit counts, then test distinct arrangements until the safe opens."""
+    """Recover digit counts from overlap, counting repeats in any position.
+
+    Test each distinct arrangement with the separate yes/no safe-open signal.
+    """
     started_at = perf_counter()
     attempts = 0
     digit_counts = [0] * 10

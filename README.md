@@ -23,6 +23,12 @@ curl http://127.0.0.1:5000/api/crack_safe/ \
 
 The response contains `attempts`, `time_taken` in seconds, `cracked_combination`, and `success`. Each attempt represents one call to the simulated lock sensor. Invalid input returns HTTP 400 with an `error` message.
 
+To select a method explicitly, send both fields. Use `"positional"` for exact-position feedback or `"backtracking"` for digit counts and the safe-open signal.
+
+```json
+{"actual_combination":"0800666666","algorithm":"backtracking"}
+```
+
 To stream progress, add `Accept: text/event-stream` to the same POST request:
 
 ```sh
