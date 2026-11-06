@@ -1,5 +1,7 @@
 # safe-cracker-full-stack
 
+Start with the [full-stack demo setup](frontend/README.md#run-locally) and the [bonus feature walkthrough](docs/bonus-features.md).
+
 ## Run the backend
 
 From the repository root with Python 3.10 or newer:
@@ -8,7 +10,7 @@ From the repository root with Python 3.10 or newer:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r backend/requirements.txt
-python -m flask --app backend.app run
+python -m flask --app backend.app run --port 5001
 ```
 
 ## Crack a combination
@@ -16,12 +18,12 @@ python -m flask --app backend.app run
 Send `actual_combination` as a string of exactly 10 ASCII digits. The optional `algorithm` field accepts `positional` (the default) or `backtracking`. Both `/api/crack_safe/` and `/api/cracksafe/` accept this request.
 
 ```sh
-curl http://127.0.0.1:5000/api/crack_safe/ \
+curl http://127.0.0.1:5001/api/crack_safe/ \
   -H 'Content-Type: application/json' \
   -d '{"actual_combination":"0800666666"}'
 ```
 
-The response contains `attempts`, `time_taken` in seconds, `cracked_combination`, and `success`. Each attempt represents one call to the simulated lock sensor. Invalid input returns HTTP 400 with an `error` message.
+The response contains `attempts`, `time_taken` in seconds, `cracked_combination`, and `success`. Each attempt counts one scoring probe or safe-open check. Invalid input returns HTTP 400 with an `error` message.
 
 To select a method explicitly, send both fields. Use `"positional"` for exact-position feedback or `"backtracking"` for digit counts and the safe-open signal.
 
@@ -32,7 +34,7 @@ To select a method explicitly, send both fields. Use `"positional"` for exact-po
 To stream progress, add `Accept: text/event-stream` to the same POST request:
 
 ```sh
-curl --no-buffer http://127.0.0.1:5000/api/crack_safe/ \
+curl --no-buffer http://127.0.0.1:5001/api/crack_safe/ \
   -H 'Content-Type: application/json' \
   -H 'Accept: text/event-stream' \
   -d '{"actual_combination":"0800666666"}'

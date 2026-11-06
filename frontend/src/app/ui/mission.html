@@ -14,7 +14,7 @@
         <p class="story-label">Meridian Hotel <span>·</span> 00:07</p>
         <h1 #sceneTitle id="mission-title" tabindex="-1">Midnight<br />Transfer</h1>
         <p class="briefing-copy">
-          A courier left a sealed dossier in Suite 07. Your field agent is at the door.
+          Your field agent is outside Suite 07. Open the safe to complete the drill.
         </p>
         <div class="story-actions">
           <button class="story-action" type="button" (click)="goToScene('suite')">
@@ -42,25 +42,23 @@
     @case ('decoder') {
       <div class="mission-shell">
         <div class="scene-navigation">
-          @if (phase() !== 'opened') {
-            <button
-              class="story-link"
-              type="button"
-              (click)="goToScene('suite')"
-              [disabled]="phase() === 'running'"
-            >
-              ← Back to suite
-            </button>
-          }
+          <button
+            class="story-link"
+            type="button"
+            (click)="goToScene('suite')"
+            [disabled]="phase() === 'running'"
+          >
+            ← Back to suite
+          </button>
         </div>
 
         <section class="mission-workspace" aria-label="Safe cracking mission">
-          <div class="field-scene" [class.safe-open]="phase() === 'opened'">
+          <div class="field-scene" [class.safe-open]="!!result()">
             <div class="scene-caption">
               <span>Suite 07 · Safe close-up</span>
               <span class="scene-status"
                 ><span class="status-light" aria-hidden="true"></span
-                >{{ phase() === 'opened' ? 'Vault open' : 'Vault secured' }}</span
+                >{{ result() ? 'Vault open' : 'Vault secured' }}</span
               >
             </div>
 
@@ -68,9 +66,7 @@
               class="safe-art"
               role="img"
               [attr.aria-label]="
-                phase() === 'opened'
-                  ? 'The open safe reveals a sealed dossier.'
-                  : 'A steel safe with a combination lock.'
+                result() ? 'The safe stands open.' : 'A steel safe with a combination lock.'
               "
             >
               <img class="safe-still" src="vault-study.webp" alt="" />
@@ -92,32 +88,10 @@
             </div>
 
             <form (submit)="start($event)" novalidate>
-              <p id="combination-hint" class="input-hint">
-                Set a 10-digit code. The decoder gets only lock feedback.
-              </p>
-              <div class="target-row">
-                <mat-form-field class="target-input" appearance="outline" subscriptSizing="dynamic">
-                  <mat-label>Vault combination</mat-label>
-                  <input
-                    matInput
-                    id="vault-combination"
-                    name="combination"
-                    type="text"
-                    inputmode="numeric"
-                    pattern="[0-9]{10}"
-                    autocomplete="off"
-                    spellcheck="false"
-                    [value]="target()"
-                    (input)="updateTarget($event)"
-                    [disabled]="phase() === 'running'"
-                    [attr.aria-invalid]="error() && invalidTarget() ? 'true' : null"
-                    [aria-describedby]="
-                      error() ? 'combination-hint input-error' : 'combination-hint'
-                    "
-                  />
-                </mat-form-field>
+              <div class="target-heading">
+                <label class="input-label" for="vault-combination">Vault combination</label>
                 <button
-                  matButton="outlined"
+                  matButton
                   type="button"
                   (click)="randomize()"
                   [disabled]="phase() === 'running'"
@@ -125,6 +99,25 @@
                   Random
                 </button>
               </div>
+              <div class="target-readout">
+                <input
+                  id="vault-combination"
+                  name="combination"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]{10}"
+                  autocomplete="off"
+                  spellcheck="false"
+                  [value]="target()"
+                  (input)="updateTarget($event)"
+                  [disabled]="phase() === 'running'"
+                  [attr.aria-invalid]="error() && invalidTarget() ? 'true' : null"
+                  [attr.aria-describedby]="
+                    error() && invalidTarget() ? 'combination-hint input-error' : 'combination-hint'
+                  "
+                />
+              </div>
+              <p id="combination-hint" class="input-hint">Enter 10 digits.</p>
               <div class="algorithm-heading">
                 <span id="algorithm-label" class="input-label">Search method</span>
                 <button matButton type="button" aria-haspopup="dialog" (click)="showAlgorithm()">
@@ -132,32 +125,21 @@
                 </button>
               </div>
               <div class="algorithm-row" role="group" aria-labelledby="algorithm-label">
-                <button
-                  [matButton]="algorithm() === 'positional' ? 'tonal' : 'outlined'"
-                  type="button"
-                  value="positional"
-                  [attr.aria-pressed]="algorithm() === 'positional'"
-                  [disabled]="phase() === 'running'"
-                  (click)="updateAlgorithm('positional')"
-                >
-                  @if (algorithm() === 'positional') {
-                    <span aria-hidden="true">✓ </span>
-                  }
-                  Positional matching
-                </button>
-                <button
-                  [matButton]="algorithm() === 'backtracking' ? 'tonal' : 'outlined'"
-                  type="button"
-                  value="backtracking"
-                  [attr.aria-pressed]="algorithm() === 'backtracking'"
-                  [disabled]="phase() === 'running'"
-                  (click)="updateAlgorithm('backtracking')"
-                >
-                  @if (algorithm() === 'backtracking') {
-                    <span aria-hidden="true">✓ </span>
-                  }
-                  Backtracking
-                </button>
+                @for (mode of searchModes; track mode) {
+                  <button
+                    [matButton]="algorithm() === mode ? 'tonal' : 'outlined'"
+                    type="button"
+                    [value]="mode"
+                    [attr.aria-pressed]="algorithm() === mode"
+                    [disabled]="phase() === 'running'"
+                    (click)="updateAlgorithm(mode)"
+                  >
+                    @if (algorithm() === mode) {
+                      <span aria-hidden="true">✓ </span>
+                    }
+                    {{ methodNames[mode] }}
+                  </button>
+                }
               </div>
               @if (error()) {
                 <p id="input-error" class="error-message" role="alert">{{ error() }}</p>
@@ -182,34 +164,38 @@
             <ng-template #algorithmDialog>
               <h2 mat-dialog-title>{{ algorithmLabel() }} · Python</h2>
               <mat-dialog-content>
-                @if (algorithm() === 'positional') {
-                  <p>
-                    <code>sound_tool</code> counts digits that are correct and in the correct
-                    position. The solver starts with ten zeros and changes one digit at a time,
-                    using changes in the score to identify the correct digit.
-                  </p>
-                } @else {
-                  <p>
-                    <code>sound_tool</code> reports how many digits the guess shares with the
-                    secret, counting repeats regardless of position. The solver learns the digit
-                    counts, tries distinct arrangements, and checks each complete guess with a
-                    separate yes/no safe-open signal.
-                  </p>
-                }
-                @if (algorithmSource(); as source) {
-                  @if (source.status === 'ready') {
+                @let source = algorithmSource();
+                @if (source.status === 'ready') {
+                  @for (entry of source.entries; track entry.algorithm) {
+                    @if (source.entries.length > 1) {
+                      <h3 class="algorithm-source-heading">{{ methodNames[entry.algorithm] }}</h3>
+                    }
+                    @if (entry.algorithm === 'positional') {
+                      <p>
+                        <code>sound_tool</code> counts digits that are correct and in the correct
+                        position. The solver starts with ten zeros and changes one digit at a time,
+                        using changes in the score to identify the correct digit.
+                      </p>
+                    } @else {
+                      <p>
+                        <code>sound_tool</code> reports how many digits the guess shares with the
+                        secret, counting repeats regardless of position. The solver learns the digit
+                        counts, tries distinct arrangements, and checks each complete guess with a
+                        separate yes/no safe-open signal.
+                      </p>
+                    }
                     <pre
                       class="algorithm-code"
                       tabindex="0"
-                      aria-label="Python implementation"
-                    ><code>{{ source.code }}</code></pre>
-                  } @else if (source.status === 'error') {
-                    <p role="alert">
-                      Could not load the Python source. Close and reopen to try again.
-                    </p>
-                  } @else {
-                    <p role="status">Loading Python source…</p>
+                      [attr.aria-label]="methodNames[entry.algorithm] + ' Python implementation'"
+                    ><code>{{ entry.code }}</code></pre>
                   }
+                } @else if (source.status === 'error') {
+                  <p role="alert">
+                    Could not load the Python source. Close and reopen to try again.
+                  </p>
+                } @else {
+                  <p role="status">Loading Python source…</p>
                 }
               </mat-dialog-content>
               <mat-dialog-actions align="end">
@@ -218,195 +204,138 @@
             </ng-template>
 
             <section class="telemetry" aria-labelledby="telemetry-title">
-              <div class="telemetry-heading">
-                <h3 id="telemetry-title">
-                  {{ phase() === 'opened' ? 'Recovered combination' : 'Current guess' }}
-                </h3>
-                <span class="run-status">{{
-                  phase() === 'opened' ? 'Opened' : phase() === 'running' ? 'Live' : 'Standby'
-                }}</span>
-              </div>
-              <div class="digit-readout" aria-label="Current combination">
-                @for (digit of guessDigits(); track $index) {
-                  <span>{{ digit }}</span>
+              @let comparing = algorithm() === 'both';
+              <h2 id="telemetry-title">
+                @if (comparing) {
+                  {{ result() ? 'Method comparison' : 'Decoder telemetry' }}
+                } @else {
+                  {{ result() ? 'Recovered combination' : 'Current guess' }}
+                }
+              </h2>
+              <div class="telemetry-grid" [class.telemetry-pair]="comparing">
+                @for (method of telemetry(); track method.algorithm) {
+                  <div
+                    class="method-telemetry"
+                    role="group"
+                    [attr.aria-label]="methodNames[method.algorithm]"
+                  >
+                    @if (comparing) {
+                      <h3>{{ methodNames[method.algorithm] }}</h3>
+                    }
+                    <p class="run-status">{{ method.status }}</p>
+                    <div class="guess-tape">
+                      <code>{{ method.guess }}</code>
+                    </div>
+                    <mat-progress-bar
+                      class="run-progress"
+                      [mode]="method.status === 'Live' ? 'indeterminate' : 'determinate'"
+                      [value]="method.status === 'Opened' ? 100 : 0"
+                      [attr.aria-label]="methodNames[method.algorithm] + ' progress'"
+                    />
+                    <dl class="run-metrics">
+                      <div>
+                        <dt>Attempts</dt>
+                        <dd>{{ method.attempts }}</dd>
+                      </div>
+                      <div>
+                        <dt>Elapsed</dt>
+                        <dd>
+                          @if (method.seconds !== undefined) {
+                            {{ formatTime(method.seconds) }}<span class="metric-unit"> s</span>
+                          } @else {
+                            —
+                          }
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
                 }
               </div>
-              <mat-progress-bar
-                class="run-progress"
-                [mode]="phase() === 'running' ? 'indeterminate' : 'determinate'"
-                [value]="phase() === 'opened' ? 100 : 0"
-                [attr.aria-label]="
-                  phase() === 'opened'
-                    ? 'Safe opened'
-                    : phase() === 'running'
-                      ? 'Cracking in progress'
-                      : 'Waiting to crack the safe'
-                "
-              />
-              <dl class="run-metrics">
-                <div>
-                  <dt>Attempts</dt>
-                  <dd>{{ attemptCount() }}</dd>
-                </div>
-                <div>
-                  <dt>Elapsed</dt>
-                  <dd>{{ elapsedTime() }}<span class="metric-unit"> s</span></dd>
-                </div>
-              </dl>
               @if (result()) {
-                <div class="success-summary" role="status">
-                  <p><span class="match-mark" aria-hidden="true">✓</span> Matches target</p>
-                  @if (trace().length) {
-                    <button
-                      #replayTrigger
-                      class="text-button"
-                      type="button"
-                      (click)="toggleReplay()"
-                      aria-controls="decode-replay"
-                      [attr.aria-expanded]="replayIndex() !== null"
-                    >
-                      {{ replayIndex() === null ? 'Replay the decode' : 'Hide replay' }}
-                      <span aria-hidden="true">↗</span>
-                    </button>
+                <p class="success-summary" role="status">
+                  <span aria-hidden="true">✓</span> Matches target
+                  @if (phase() === 'error') {
+                    · {{ methodNames[runs()[0].algorithm] }} completed
                   }
-                </div>
-                <button class="dossier-action" type="button" (click)="goToScene('dossier')">
-                  Recover the dossier <span aria-hidden="true">↗</span>
-                </button>
-              } @else {
+                </p>
+              } @else if (phase() !== 'error') {
                 <p class="telemetry-note">{{ telemetryNote() }}</p>
               }
             </section>
-          </div>
-        </section>
 
-        @if (replayAttempt(); as attempt) {
-          <section
-            id="decode-replay"
-            class="replay-panel"
-            aria-label="Replay of the completed decode"
-          >
-            <div class="replay-heading">
-              <div>
-                <h2>Replay the decode</h2>
+            @if (replayRun(); as replay) {
+              @let attempt = replay.probes[replayIndex()];
+              <section class="replay-panel" aria-labelledby="replay-title">
+                <h2 id="replay-title">Decoder replay</h2>
+                @if (replayRuns().length > 1) {
+                  <div class="replay-methods" role="group" aria-label="Replay method">
+                    @for (run of replayRuns(); track run.algorithm) {
+                      <button
+                        [matButton]="run.algorithm === replay.algorithm ? 'tonal' : 'outlined'"
+                        type="button"
+                        [attr.aria-pressed]="run.algorithm === replay.algorithm"
+                        (click)="selectReplay(run.algorithm)"
+                      >
+                        {{ methodNames[run.algorithm] }}
+                      </button>
+                    }
+                  </div>
+                }
                 @if (replayIsSampled()) {
                   <p>
-                    Sampled replay · {{ trace().length }} recorded probes from
-                    {{ result()?.attempts }} attempts
+                    Sampled replay · {{ replay.probes.length }} recorded probes from
+                    {{ replay.result.attempts }} attempts
                   </p>
-                } @else {
-                  <p>All recorded probes from this run</p>
                 }
-              </div>
-              <button class="close-replay" type="button" (click)="closeReplay()">
-                Close replay <span aria-hidden="true">×</span>
-              </button>
-            </div>
-            <div class="replay-body">
-              <div class="replay-guess">{{ attempt.currentCombination }}</div>
-              <div class="replay-controls">
-                <button type="button" (click)="moveReplay(-1)" [disabled]="replayIndex() === 0">
-                  Previous
-                </button>
-                <p role="status">
-                  @if (replayIsSampled()) {
-                    Probe {{ attempt.attempts }} of {{ result()?.attempts }}
-                  } @else {
-                    Step {{ (replayIndex() ?? 0) + 1 }} of {{ trace().length }}
-                  }
-                </p>
-                <button
-                  type="button"
-                  (click)="moveReplay(1)"
-                  [disabled]="replayIndex() === trace().length - 1"
+                <div class="replay-guess">
+                  <code>{{ attempt.currentCombination }}</code>
+                </div>
+                <mat-slider
+                  class="replay-slider"
+                  [min]="1"
+                  [max]="replay.probes.length === 1 ? 2 : replay.probes.length"
+                  [disabled]="replay.probes.length === 1"
                 >
-                  Next
-                </button>
-              </div>
-            </div>
-            <p class="replay-caption">
-              Probe {{ attempt.attempts }} · {{ formatTime(attempt.timeTaken) }} s elapsed
-            </p>
-          </section>
-        }
-      </div>
-    }
-    @case ('dossier') {
-      @if (result(); as report) {
-        @let methods = comparison();
-        <section class="dossier-scene" aria-labelledby="dossier-title">
-          <article class="dossier-sheet">
-            <p class="story-label">Field report <span>·</span> Meridian Hotel</p>
-            <h1 #sceneTitle id="dossier-title" tabindex="-1">Dossier recovered.</h1>
-            <p>
-              The agent left Suite 07 with the sealed file. The recovered code matched the target.
-            </p>
-            <dl class="dossier-data">
-              <div>
-                <dt>Recovered code</dt>
-                <dd>{{ report.crackedCombination }}</dd>
-              </div>
-              @if (!methods) {
-                <div>
-                  <dt>Search method</dt>
-                  <dd>{{ algorithmLabel() }}</dd>
-                </div>
-                <div>
-                  <dt>Attempts</dt>
-                  <dd>{{ report.attempts }}</dd>
-                </div>
-                <div>
-                  <dt>Elapsed</dt>
-                  <dd>{{ elapsedTime() }} s</dd>
-                </div>
-              }
-            </dl>
-            @if (methods) {
-              <table class="method-comparison">
-                <caption>
-                  Method comparison
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Measure</th>
-                    @for (method of methods; track method.algorithm) {
-                      <th scope="col">{{ methodNames[method.algorithm] }}</th>
+                  <input
+                    matSliderThumb
+                    #scrubber="matSliderThumb"
+                    [value]="replayIndex() + 1"
+                    [attr.aria-label]="methodNames[replay.algorithm] + ' replay step'"
+                    (input)="seekReplay(scrubber.value - 1)"
+                    (valueChange)="seekReplay($event - 1)"
+                  />
+                </mat-slider>
+                <div class="replay-controls">
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    (click)="moveReplay(-1)"
+                    [disabled]="replayIndex() === 0"
+                  >
+                    Previous
+                  </button>
+                  <p role="status">
+                    @if (replayIsSampled()) {
+                      Probe {{ attempt.attempts }} of {{ replay.result.attempts }}
+                    } @else {
+                      Step {{ replayIndex() + 1 }} of {{ replay.probes.length }}
                     }
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <th scope="row">Attempts</th>
-                    @for (method of methods; track method.algorithm) {
-                      <td>{{ method.result.attempts }}</td>
-                    }
-                  </tr>
-                  <tr>
-                    <th scope="row">Elapsed</th>
-                    @for (method of methods; track method.algorithm) {
-                      <td>{{ formatTime(method.result.timeTaken) }} s</td>
-                    }
-                  </tr>
-                </tbody>
-              </table>
-              <p class="comparison-note">The methods use different kinds of lock feedback.</p>
+                  </p>
+                  <button
+                    matButton="outlined"
+                    type="button"
+                    (click)="moveReplay(1)"
+                    [disabled]="replayIndex() === replay.probes.length - 1"
+                  >
+                    Next
+                  </button>
+                </div>
+                <p>Probe {{ attempt.attempts }} · {{ formatTime(attempt.timeTaken) }} s elapsed</p>
+              </section>
             }
-            <div class="story-actions">
-              @if (!methods) {
-                <button matButton="tonal" type="button" (click)="tryOtherMethod()">
-                  Try the other method
-                </button>
-              }
-              <button class="story-action" type="button" (click)="restartMission()">
-                Run another drill <span aria-hidden="true">↗</span>
-              </button>
-              <button class="story-link" type="button" (click)="goToScene('decoder')">
-                Back to results
-              </button>
-            </div>
-          </article>
+          </div>
         </section>
-      }
+      </div>
     }
   }
 </main>

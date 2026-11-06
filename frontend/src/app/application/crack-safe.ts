@@ -1,4 +1,5 @@
 export type CrackAlgorithm = 'positional' | 'backtracking';
+export const COMBINATION_LENGTH = 10;
 
 export interface CrackProgress {
   attempts: number;
@@ -24,5 +25,5 @@ export interface CrackSafeGateway {
 }
 
 export function isCombination(value: unknown): value is string {
-  return typeof value === 'string' && value.length === 10 && !/[^0-9]/.test(value);
+  return typeof value === 'string' && value.length === COMBINATION_LENGTH && !/[^0-9]/.test(value);
 }

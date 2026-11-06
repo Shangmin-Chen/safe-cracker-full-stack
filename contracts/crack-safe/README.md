@@ -2,7 +2,7 @@
 
 `POST /api/crack_safe/` and `POST /api/cracksafe/` take a JSON object with `actual_combination` as a string of ten ASCII digits. A combination can start with zero. `algorithm` accepts `"positional"` (the default) or `"backtracking"`.
 
-The Angular client sends both fields for every run. To select backtracking, send:
+The Angular client sends both fields for every run. Its **Both** option sends separate positional and backtracking requests with the same combination. To select backtracking, send:
 
 ```json
 {"actual_combination":"0800666666","algorithm":"backtracking"}
