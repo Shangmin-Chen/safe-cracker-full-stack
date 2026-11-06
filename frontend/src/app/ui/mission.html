@@ -1,0 +1,355 @@
+<main class="experience" [attr.data-scene]="scene()">
+  <div class="world" aria-hidden="true">
+    <img class="world-image" src="vault-study.webp" alt="" fetchpriority="high" />
+  </div>
+
+  <header class="story-header">
+    <span class="story-brand">Safe Cracker</span>
+    <span class="story-chapter">{{ chapter() }}</span>
+  </header>
+
+  @switch (scene()) {
+    @case ('briefing') {
+      <section class="briefing" aria-labelledby="mission-title">
+        <p class="story-label">Meridian Hotel <span>·</span> 00:07</p>
+        <h1 #sceneTitle id="mission-title" tabindex="-1">Midnight<br />Transfer</h1>
+        <p class="briefing-copy">
+          A courier left a sealed dossier in Suite 07. Your field agent is at the door.
+        </p>
+        <div class="story-actions">
+          <button class="story-action" type="button" (click)="goToScene('suite')">
+            Enter the suite <span aria-hidden="true">↗</span>
+          </button>
+          <button class="story-link" type="button" (click)="goToScene('decoder')">
+            Skip to decoder
+          </button>
+        </div>
+      </section>
+    }
+    @case ('suite') {
+      <section class="suite" aria-labelledby="suite-title">
+        <h1 #sceneTitle id="suite-title" class="suite-title" tabindex="-1">Suite 07</h1>
+        <button class="safe-hotspot" type="button" (click)="goToScene('decoder')">
+          <span class="hotspot-mark" aria-hidden="true">+</span>
+          <span class="hotspot-label">Inspect the safe</span>
+        </button>
+        <div class="scene-transmission">
+          <span>Agent to control</span>
+          <p>“I’m inside. The safe is straight ahead.”</p>
+        </div>
+      </section>
+    }
+    @case ('decoder') {
+      <div class="mission-shell">
+        <div class="scene-navigation">
+          @if (phase() !== 'opened') {
+            <button
+              class="story-link"
+              type="button"
+              (click)="goToScene('suite')"
+              [disabled]="phase() === 'running'"
+            >
+              ← Back to suite
+            </button>
+          }
+        </div>
+
+        <section class="mission-workspace" aria-label="Safe cracking mission">
+          <div class="field-scene" [class.safe-open]="phase() === 'opened'">
+            <div class="scene-caption">
+              <span>Suite 07 · Safe close-up</span>
+              <span class="scene-status"
+                ><span class="status-light" aria-hidden="true"></span
+                >{{ phase() === 'opened' ? 'Vault open' : 'Vault secured' }}</span
+              >
+            </div>
+
+            <div
+              class="safe-art"
+              role="img"
+              [attr.aria-label]="
+                phase() === 'opened'
+                  ? 'The open safe reveals a sealed dossier.'
+                  : 'A steel safe with a combination lock.'
+              "
+            >
+              <img class="safe-still" src="vault-study.webp" alt="" />
+              <img class="safe-still safe-still-open" src="vault-study-open.webp" alt="" />
+            </div>
+
+            <div class="radio-message" role="status" aria-live="polite">
+              <span class="radio-label"
+                ><span class="radio-mark" aria-hidden="true">⌁</span> Agent to control</span
+              >
+              <p>“{{ radioMessage() }}”</p>
+            </div>
+          </div>
+
+          <div class="decoder-console">
+            <div class="console-heading">
+              <h1 #sceneTitle tabindex="-1">Acoustic decoder</h1>
+              <span class="method-label">{{ algorithmLabel() }}</span>
+            </div>
+
+            <form (submit)="start($event)" novalidate>
+              <p id="combination-hint" class="input-hint">
+                Set a 10-digit code. The decoder gets only lock feedback.
+              </p>
+              <div class="target-row">
+                <mat-form-field class="target-input" appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>Vault combination</mat-label>
+                  <input
+                    matInput
+                    id="vault-combination"
+                    name="combination"
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]{10}"
+                    autocomplete="off"
+                    spellcheck="false"
+                    [value]="target()"
+                    (input)="updateTarget($event)"
+                    [disabled]="phase() === 'running'"
+                    [attr.aria-invalid]="error() && invalidTarget() ? 'true' : null"
+                    [aria-describedby]="
+                      error() ? 'combination-hint input-error' : 'combination-hint'
+                    "
+                  />
+                </mat-form-field>
+                <button
+                  matButton="outlined"
+                  type="button"
+                  (click)="randomize()"
+                  [disabled]="phase() === 'running'"
+                >
+                  Random
+                </button>
+              </div>
+              <div class="algorithm-heading">
+                <span id="algorithm-label" class="input-label">Search method</span>
+                <button matButton type="button" aria-haspopup="dialog" (click)="showAlgorithm()">
+                  Show algorithm
+                </button>
+              </div>
+              <mat-button-toggle-group
+                class="algorithm-row"
+                aria-labelledby="algorithm-label"
+                [value]="algorithm()"
+                [disabled]="phase() === 'running'"
+                (change)="updateAlgorithm($event.value)"
+              >
+                <mat-button-toggle value="positional">Positional matching</mat-button-toggle>
+                <mat-button-toggle value="backtracking">Backtracking</mat-button-toggle>
+              </mat-button-toggle-group>
+              @if (error()) {
+                <p id="input-error" class="error-message" role="alert">{{ error() }}</p>
+              }
+              <button
+                matButton="filled"
+                class="crack-button"
+                type="submit"
+                [disabled]="phase() === 'running'"
+              >
+                <span>{{
+                  phase() === 'running'
+                    ? 'Decoding…'
+                    : phase() === 'opened'
+                      ? 'Crack again'
+                      : 'Crack safe'
+                }}</span>
+                <span matButtonIcon iconPositionEnd aria-hidden="true">↗</span>
+              </button>
+            </form>
+
+            <ng-template #algorithmDialog>
+              <h2 mat-dialog-title>{{ algorithmLabel() }} · Python</h2>
+              <mat-dialog-content>
+                @if (algorithm() === 'positional') {
+                  <p>
+                    Start with ten zeros and change one position at a time. A higher score confirms
+                    the new digit, a lower score confirms the original zero, and a tie means try
+                    another digit.
+                  </p>
+                } @else {
+                  <p>
+                    Probe ten repeated-digit strings to learn the counts. Then build each distinct
+                    ordering from the remaining counts, restoring a count on backtrack. The
+                    safe-open signal ends the search.
+                  </p>
+                }
+                @if (algorithmSource(); as source) {
+                  @if (source.status === 'ready') {
+                    <pre
+                      class="algorithm-code"
+                      tabindex="0"
+                      aria-label="Python implementation"
+                    ><code>{{ source.code }}</code></pre>
+                  } @else if (source.status === 'error') {
+                    <p role="alert">
+                      Could not load the Python source. Close and reopen to try again.
+                    </p>
+                  } @else {
+                    <p role="status">Loading Python source…</p>
+                  }
+                }
+              </mat-dialog-content>
+              <mat-dialog-actions align="end">
+                <button matButton mat-dialog-close type="button" cdkFocusInitial>Close</button>
+              </mat-dialog-actions>
+            </ng-template>
+
+            <section class="telemetry" aria-labelledby="telemetry-title">
+              <div class="telemetry-heading">
+                <h3 id="telemetry-title">
+                  {{ phase() === 'opened' ? 'Recovered combination' : 'Current guess' }}
+                </h3>
+                <span class="run-status">{{
+                  phase() === 'opened' ? 'Opened' : phase() === 'running' ? 'Live' : 'Standby'
+                }}</span>
+              </div>
+              <div class="digit-readout" aria-label="Current combination">
+                @for (digit of guessDigits(); track $index) {
+                  <span>{{ digit }}</span>
+                }
+              </div>
+              <mat-progress-bar
+                class="run-progress"
+                [mode]="phase() === 'running' ? 'indeterminate' : 'determinate'"
+                [value]="phase() === 'opened' ? 100 : 0"
+                [attr.aria-label]="
+                  phase() === 'opened'
+                    ? 'Safe opened'
+                    : phase() === 'running'
+                      ? 'Cracking in progress'
+                      : 'Waiting to crack the safe'
+                "
+              />
+              <dl class="run-metrics">
+                <div>
+                  <dt>Attempts</dt>
+                  <dd>{{ attemptCount() }}</dd>
+                </div>
+                <div>
+                  <dt>Elapsed</dt>
+                  <dd>{{ elapsedTime() }}<span class="metric-unit"> s</span></dd>
+                </div>
+              </dl>
+              @if (result()) {
+                <div class="success-summary" role="status">
+                  <p><span class="match-mark" aria-hidden="true">✓</span> Matches target</p>
+                  @if (trace().length) {
+                    <button
+                      #replayTrigger
+                      class="text-button"
+                      type="button"
+                      (click)="toggleReplay()"
+                      aria-controls="decode-replay"
+                      [attr.aria-expanded]="replayIndex() !== null"
+                    >
+                      {{ replayIndex() === null ? 'Replay the decode' : 'Hide replay' }}
+                      <span aria-hidden="true">↗</span>
+                    </button>
+                  }
+                </div>
+                <button class="dossier-action" type="button" (click)="goToScene('dossier')">
+                  Recover the dossier <span aria-hidden="true">↗</span>
+                </button>
+              } @else {
+                <p class="telemetry-note">{{ telemetryNote() }}</p>
+              }
+            </section>
+          </div>
+        </section>
+
+        @if (replayAttempt(); as attempt) {
+          <section
+            id="decode-replay"
+            class="replay-panel"
+            aria-label="Replay of the completed decode"
+          >
+            <div class="replay-heading">
+              <div>
+                <h2>Replay the decode</h2>
+                @if (replayIsSampled()) {
+                  <p>
+                    Sampled replay · {{ trace().length }} recorded probes from
+                    {{ result()?.attempts }} attempts
+                  </p>
+                } @else {
+                  <p>All recorded probes from this run</p>
+                }
+              </div>
+              <button class="close-replay" type="button" (click)="closeReplay()">
+                Close replay <span aria-hidden="true">×</span>
+              </button>
+            </div>
+            <div class="replay-body">
+              <div class="replay-guess">{{ attempt.currentCombination }}</div>
+              <div class="replay-controls">
+                <button type="button" (click)="moveReplay(-1)" [disabled]="replayIndex() === 0">
+                  Previous
+                </button>
+                <p role="status">
+                  @if (replayIsSampled()) {
+                    Probe {{ attempt.attempts }} of {{ result()?.attempts }}
+                  } @else {
+                    Step {{ (replayIndex() ?? 0) + 1 }} of {{ trace().length }}
+                  }
+                </p>
+                <button
+                  type="button"
+                  (click)="moveReplay(1)"
+                  [disabled]="replayIndex() === trace().length - 1"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+            <p class="replay-caption">
+              Probe {{ attempt.attempts }} · {{ formatTime(attempt.timeTaken) }} s elapsed
+            </p>
+          </section>
+        }
+      </div>
+    }
+    @case ('dossier') {
+      @if (result(); as report) {
+        <section class="dossier-scene" aria-labelledby="dossier-title">
+          <article class="dossier-sheet">
+            <p class="story-label">Field report <span>·</span> Meridian Hotel</p>
+            <h1 #sceneTitle id="dossier-title" tabindex="-1">Dossier recovered.</h1>
+            <p>
+              The agent left Suite 07 with the sealed file. The recovered code matched the target.
+            </p>
+            <dl class="dossier-data">
+              <div>
+                <dt>Recovered code</dt>
+                <dd>{{ report.crackedCombination }}</dd>
+              </div>
+              <div>
+                <dt>Search method</dt>
+                <dd>{{ algorithmLabel() }}</dd>
+              </div>
+              <div>
+                <dt>Attempts</dt>
+                <dd>{{ report.attempts }}</dd>
+              </div>
+              <div>
+                <dt>Elapsed</dt>
+                <dd>{{ elapsedTime() }} s</dd>
+              </div>
+            </dl>
+            <div class="story-actions">
+              <button class="story-action" type="button" (click)="restartMission()">
+                Run another drill <span aria-hidden="true">↗</span>
+              </button>
+              <button class="story-link" type="button" (click)="goToScene('decoder')">
+                Back to results
+              </button>
+            </div>
+          </article>
+        </section>
+      }
+    }
+  }
+</main>

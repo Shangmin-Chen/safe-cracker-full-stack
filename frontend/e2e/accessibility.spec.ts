@@ -1,0 +1,70 @@
+import AxeBuilder from '@axe-core/playwright';
+import { expect, type Page, test } from '@playwright/test';
+
+async function checkAccessibility(page: Page, scene: string): Promise<void> {
+  const { violations } = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(violations, scene).toEqual([]);
+}
+
+test('story, decoder, source dialog, and debrief pass the automated accessibility checks', async ({
+  page,
+}) => {
+  await page.route('**/api/crack_safe/**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({
+        json: {
+          algorithm: 'backtracking',
+          source: 'def crack_backtracking_attempts(port):\n    yield from search(port)\n',
+        },
+      });
+      return;
+    }
+    const progress = { attempts: 1, current_combination: '0000000000', time_taken: 0.01 };
+    const result = {
+      attempts: 1,
+      cracked_combination: '0000000000',
+      time_taken: 0.01,
+      success: true,
+    };
+    await route.fulfill({
+      contentType: 'text/event-stream',
+      body: `event: progress\ndata: ${JSON.stringify(progress)}\n\nevent: result\ndata: ${JSON.stringify(result)}\n\n`,
+    });
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Enter the suite' })).toBeVisible();
+  await checkAccessibility(page, 'Briefing');
+  await page.getByRole('button', { name: 'Enter the suite' }).click();
+  await checkAccessibility(page, 'Suite');
+  await page.getByRole('button', { name: 'Inspect the safe' }).click();
+  await expect(page.getByRole('heading', { name: 'Acoustic decoder' })).toBeFocused();
+  await checkAccessibility(page, 'Decoder');
+
+  await page.getByText('Backtracking', { exact: true }).click();
+  const showAlgorithm = page.getByRole('button', { name: 'Show algorithm' });
+  await showAlgorithm.click();
+  const dialog = page.getByRole('dialog', { name: 'Backtracking · Python' });
+  await expect(dialog.locator('code')).toContainText('def crack_backtracking_attempts');
+  await checkAccessibility(page, 'Algorithm dialog');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(showAlgorithm).toBeFocused();
+
+  const combination = page.getByRole('textbox', { name: 'Vault combination' });
+  await combination.fill('12');
+  await page.getByRole('button', { name: 'Crack safe' }).click();
+  await expect(page.getByRole('alert')).toContainText('Enter exactly 10 digits');
+  await checkAccessibility(page, 'Invalid combination');
+  await combination.fill('0000000000');
+  await page.getByRole('button', { name: 'Crack safe' }).click();
+  await expect(page.getByText('Matches target')).toBeVisible();
+  await page.getByRole('button', { name: 'Replay the decode' }).click();
+  await expect(page.getByText('Step 1 of 1')).toBeVisible();
+  await checkAccessibility(page, 'Replay');
+  await page.getByRole('button', { name: 'Recover the dossier' }).click();
+  await expect(page.getByRole('heading', { name: 'Dossier recovered.' })).toBeFocused();
+  await checkAccessibility(page, 'Debrief');
+});
