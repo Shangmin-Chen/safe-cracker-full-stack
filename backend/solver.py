@@ -34,7 +34,10 @@ class Attempt:
 
 
 def crack_attempts(score_guess: ScoringPort) -> Iterator[Attempt]:
-    """Yield each guess made while finding the combination position by position."""
+    """Find the combination from exact-position match counts.
+
+    Change one digit at a time and compare the new score with the previous one.
+    """
     started_at = perf_counter()
     attempts = 0
     current = ["0"] * COMBINATION_LENGTH
