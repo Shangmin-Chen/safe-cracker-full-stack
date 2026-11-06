@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from .solver import is_valid_combination
+from .domain import is_valid_combination
 
 
 def sound_tool(guess: str, actual_combination: str, /, *, multiset: bool = False) -> int:
@@ -15,7 +15,7 @@ def sound_tool(guess: str, actual_combination: str, /, *, multiset: bool = False
     )
 
 
-class SimulatedSoundTool:
+class SimulatedPositionalSoundTool:
     def __init__(self, actual_combination: str) -> None:
         if not is_valid_combination(actual_combination):
             raise ValueError("actual_combination must contain exactly 10 ASCII digits")

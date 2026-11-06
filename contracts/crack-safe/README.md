@@ -27,4 +27,4 @@ Positional matching streams every probe. Backtracking streams the first 1,024 pr
 
 Without the SSE accept header, the response is the result object as JSON. Invalid requests return HTTP 400 with a JSON `error` string in either mode.
 
-`GET /api/crack_safe/algorithms/<algorithm>/` returns `{ "algorithm": "positional", "source": "..." }` for either supported mode. `source` is the Python function used by the running server. An unknown mode returns HTTP 404 with a JSON `error` string.
+`GET /api/crack_safe/algorithms/<algorithm>/` returns `{ "algorithm": "positional", "source": "..." }` for either supported mode. `source` contains the Python function used by the running server. The `positional` mode serves `crack_positional_attempts` from `backend/positional.py`. The `backtracking` mode serves `crack_backtracking_attempts` from `backend/backtracking.py`. An unknown mode returns HTTP 404 with a JSON `error` string.

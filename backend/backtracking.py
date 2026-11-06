@@ -4,7 +4,7 @@ from collections.abc import Iterator
 from time import perf_counter
 from typing import Protocol
 
-from .solver import COMBINATION_LENGTH, Attempt
+from .domain import COMBINATION_LENGTH, Attempt
 
 
 class BacktrackingScoringPort(Protocol):

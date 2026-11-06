@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from backend.app import app
 from backend.backtracking import crack_backtracking_attempts
-from backend.solver import crack_attempts
+from backend.positional import crack_positional_attempts
 from backend.sound_tool import sound_tool
 
 
@@ -32,7 +32,7 @@ class CrackSafeContractTests(unittest.TestCase):
 
     def test_algorithm_source_uses_the_running_implementation(self):
         for name, implementation in (
-            ("positional", crack_attempts),
+            ("positional", crack_positional_attempts),
             ("backtracking", crack_backtracking_attempts),
         ):
             with self.subTest(algorithm=name):

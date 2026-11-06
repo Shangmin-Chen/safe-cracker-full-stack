@@ -1,39 +1,19 @@
 """Positional search for a ten-digit safe combination."""
 
 from collections.abc import Iterator
-from dataclasses import dataclass
 from time import perf_counter
-from typing import Protocol, TypeGuard
+from typing import Protocol
+
+from .domain import COMBINATION_LENGTH, Attempt
 
 
-COMBINATION_LENGTH = 10
-
-
-class ScoringPort(Protocol):
+class PositionalScoringPort(Protocol):
     def __call__(self, guess: str, /) -> int:
         """Return the number of digits in the correct positions."""
         ...
 
 
-def is_valid_combination(value: object) -> TypeGuard[str]:
-    """Return whether value is exactly ten ASCII decimal digits."""
-    return (
-        isinstance(value, str)
-        and len(value) == COMBINATION_LENGTH
-        and value.isascii()
-        and value.isdigit()
-    )
-
-
-@dataclass(frozen=True)
-class Attempt:
-    attempts: int
-    current_combination: str
-    time_taken: float
-    opened: bool
-
-
-def crack_attempts(score_guess: ScoringPort) -> Iterator[Attempt]:
+def crack_positional_attempts(score_guess: PositionalScoringPort) -> Iterator[Attempt]:
     """Find the combination from exact-position match counts.
 
     Change one digit at a time and compare the new score with the previous one.
@@ -79,10 +59,10 @@ def crack_attempts(score_guess: ScoringPort) -> Iterator[Attempt]:
     raise RuntimeError("positional search exhausted without opening the safe")
 
 
-def crack_safe(score_guess: ScoringPort) -> Attempt:
+def crack_positional(score_guess: PositionalScoringPort) -> Attempt:
     """Run the probe sequence and return the successful attempt."""
     final_attempt = None
-    for attempt in crack_attempts(score_guess):
+    for attempt in crack_positional_attempts(score_guess):
         final_attempt = attempt
 
     if final_attempt is None or not final_attempt.opened:
