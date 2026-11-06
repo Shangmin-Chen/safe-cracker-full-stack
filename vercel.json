@@ -4,5 +4,10 @@
   "installCommand": "npm ci --prefix frontend",
   "buildCommand": "npm run build --prefix frontend",
   "outputDirectory": "frontend/dist/safe-cracker/browser",
-  "rewrites": [{ "source": "/api/:path*", "destination": "/api/index" }]
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{frontend/**,backend/tests/**,contracts/**,docs/**}"
+    }
+  },
+  "rewrites": [{ "source": "/api/(.*)", "destination": "/api/index" }]
 }
