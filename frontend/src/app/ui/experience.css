@@ -1,0 +1,423 @@
+.experience {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow: clip;
+  --story-white: #f5ebd5;
+  --story-gold: #e4b977;
+  --story-ink: #281a13;
+}
+
+.world {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  overflow: hidden;
+  background: #1b1716;
+  pointer-events: none;
+}
+
+.world-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 51% 52%;
+  transform-origin: 51% 52%;
+  transition:
+    transform 950ms cubic-bezier(0.22, 0.75, 0.25, 1),
+    filter 720ms ease;
+}
+
+.world::after {
+  position: absolute;
+  inset: 0;
+  content: '';
+  background: linear-gradient(180deg, #140f0d9e, transparent 22%, transparent 68%, #140f0de6);
+}
+
+[data-scene='briefing'] .world::after {
+  background:
+    linear-gradient(90deg, #100b0aef 0%, #160f0ddd 23%, #1c110e63 58%, #1c110e1c),
+    linear-gradient(180deg, #140e0ca0, transparent 27%, transparent 72%, #140e0c9e);
+}
+
+[data-scene='suite'] .world-image {
+  transform: scale(1.04);
+}
+[data-scene='decoder'] .world-image {
+  transform: translateX(12%) scale(1.54);
+  filter: brightness(0.42) blur(7px);
+}
+[data-scene='dossier'] .world-image {
+  transform: scale(1.2);
+  filter: brightness(0.39) blur(7px);
+}
+
+.story-header {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 26px clamp(18px, 5vw, 72px);
+  color: var(--story-white);
+}
+
+.story-brand {
+  font-family: Georgia, serif;
+  font-size: 21px;
+}
+.story-chapter,
+.story-label,
+.scene-transmission span {
+  font:
+    600 11px/1.4 ui-monospace,
+    monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.story-chapter {
+  color: #eed3a7;
+}
+.story-label {
+  margin: 0 0 18px;
+  color: var(--story-gold);
+}
+.story-label span {
+  margin-inline: 5px;
+}
+
+.briefing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100svh;
+  padding: 112px clamp(20px, 8vw, 138px) 58px;
+  color: var(--story-white);
+}
+
+.briefing h1,
+.dossier-sheet h1 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+}
+
+.briefing h1 {
+  font-size: clamp(64px, 9.5vw, 144px);
+  line-height: 0.95;
+  letter-spacing: -0.065em;
+  text-shadow: 0 7px 50px #160e0bbf;
+}
+
+.briefing-copy {
+  max-width: 32ch;
+  margin: 30px 0 26px;
+  color: #f1dfc4;
+  font-size: clamp(15px, 1.6vw, 19px);
+  line-height: 1.55;
+}
+
+.story-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px 20px;
+}
+.story-action,
+.story-link,
+.dossier-action {
+  min-height: 44px;
+  padding: 9px 0;
+  border: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.story-action {
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding-inline: 17px;
+  color: var(--story-ink);
+  background: var(--story-gold);
+  box-shadow: 0 6px 20px #170e0b4d;
+}
+.story-action:hover {
+  background: #f0d09a;
+}
+.story-link {
+  color: inherit;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.story-link:hover {
+  text-decoration-thickness: 2px;
+}
+.story-action span,
+.dossier-action span {
+  font-size: 17px;
+}
+
+.suite {
+  position: relative;
+  display: grid;
+  min-height: max(420px, 100svh);
+  align-items: end;
+  justify-items: center;
+  padding: 104px 18px clamp(24px, 6vh, 66px);
+}
+
+.suite-title {
+  position: absolute;
+  top: 82px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  color: var(--story-white);
+  font:
+    400 clamp(26px, 3vw, 42px)/1 Georgia,
+    serif;
+  text-shadow: 0 2px 14px #180c09;
+}
+
+.safe-hotspot {
+  position: absolute;
+  left: 51%;
+  top: 52%;
+  transform: translate(-50%, -25px);
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  min-width: 54px;
+  min-height: 54px;
+  padding: 0;
+  border: 0;
+  color: var(--story-ink);
+  background: transparent;
+}
+
+.hotspot-mark {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+  border: 1px solid #f3d8a9;
+  border-radius: 50%;
+  color: #fff3dc;
+  background: #251812c4;
+  box-shadow:
+    0 0 0 7px #e4b97732,
+    0 6px 28px #140b07b3;
+  font:
+    300 28px/1 Georgia,
+    serif;
+  transition:
+    background-color 160ms,
+    box-shadow 160ms;
+}
+.safe-hotspot:hover .hotspot-mark {
+  background: #65452b;
+  box-shadow: 0 0 0 10px #e4b9774d;
+}
+.hotspot-label {
+  padding: 6px 10px;
+  color: #221710;
+  background: #f0dfbd;
+  font:
+    600 12px/1.35 system-ui,
+    sans-serif;
+  white-space: nowrap;
+}
+
+.scene-transmission {
+  max-width: 100%;
+  padding: 14px 20px 12px;
+  color: var(--story-white);
+  background: #211610e8;
+  text-align: center;
+}
+.scene-transmission span {
+  color: #e2b678;
+}
+.scene-transmission p {
+  margin: 7px 0 0;
+  font:
+    italic clamp(16px, 2vw, 23px)/1.35 Georgia,
+    serif;
+}
+
+.scene-navigation {
+  min-height: 44px;
+  color: var(--story-white);
+}
+.dossier-action {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-inline: 12px;
+  color: var(--story-ink);
+  background: #d7bd91;
+}
+.dossier-action:hover {
+  background: #e7cf9e;
+}
+
+.dossier-scene {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding: 94px 18px 44px;
+}
+
+.dossier-sheet {
+  width: min(100%, 580px);
+  padding: clamp(24px, 5vw, 58px);
+  border-top: 6px solid #9a4a35;
+  color: var(--story-ink);
+  background: #f0e1c4;
+  box-shadow:
+    12px 13px 0 #855b3f70,
+    0 20px 100px #130b08b0;
+}
+
+.dossier-sheet h1 {
+  font-size: clamp(36px, 5.2vw, 62px);
+  line-height: 0.97;
+  letter-spacing: -0.06em;
+}
+.dossier-sheet .story-label {
+  color: #873c2a;
+}
+.dossier-sheet > p:not(.story-label) {
+  margin: 20px 0;
+  line-height: 1.55;
+}
+.dossier-data {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 24px 0;
+  padding-block: 20px;
+  border-block: 1px solid #b39d7d;
+}
+.dossier-data dt {
+  margin-bottom: 4px;
+  color: #61523e;
+  font-size: 12px;
+}
+.dossier-data dd {
+  margin: 0;
+  font:
+    15px/1.4 ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.dossier-sheet .story-action {
+  background: #733f31;
+  color: #fff0d8;
+  box-shadow: none;
+}
+.dossier-sheet .story-action:hover {
+  background: #8b503c;
+}
+
+.method-comparison {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.method-comparison caption {
+  padding-bottom: 8px;
+  font-weight: 700;
+  text-align: left;
+}
+.method-comparison :is(th, td) {
+  padding: 8px 5px;
+  border-bottom: 1px solid #b39d7d;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.method-comparison :is(th, td):first-child {
+  width: 28%;
+}
+.method-comparison td {
+  font-family: ui-monospace, monospace;
+}
+.dossier-sheet .comparison-note {
+  margin-top: 10px;
+  color: #61523e;
+  font-size: 12px;
+}
+
+.briefing,
+.scene-transmission,
+.mission-shell,
+.dossier-sheet {
+  animation: scene-in 400ms ease-out both;
+}
+@keyframes scene-in {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .method-comparison {
+    font-size: 12px;
+  }
+  .method-comparison :is(th, td) {
+    padding-inline: 3px;
+  }
+  .story-header {
+    padding-block: 19px;
+  }
+  .story-brand {
+    font-size: 18px;
+  }
+  [data-scene='briefing'] .world::after {
+    background:
+      linear-gradient(0deg, #100b0af5, #160f0dd9 46%, #1c110e24 82%),
+      linear-gradient(180deg, #140e0c9e, transparent 24%);
+  }
+  .briefing {
+    justify-content: end;
+    padding-bottom: max(34px, 8svh);
+  }
+  .briefing-copy {
+    margin: 22px 0 18px;
+  }
+  .story-actions {
+    gap: 6px 15px;
+  }
+  .suite-title {
+    top: 72px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-image,
+  .hotspot-mark {
+    transition: none;
+  }
+  .briefing,
+  .scene-transmission,
+  .mission-shell,
+  .dossier-sheet {
+    animation: none;
+  }
+}
