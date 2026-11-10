@@ -1,80 +1,58 @@
-"""Multiset-guided search for a safe combination's digit ordering."""
-
-from collections.abc import Iterator
+from collections import Counter
 from time import perf_counter
-from typing import Protocol
-
-from .domain import COMBINATION_LENGTH, Attempt
 
 
-class BacktrackingScoringPort(Protocol):
-    def count_matches(self, guess: str, /) -> int:
-        """Return how many guessed digits occur in the secret, including repeats."""
-        ...
-
-    def opens(self, guess: str, /) -> bool:
-        """Return whether the exact guess opens the safe."""
-        ...
+def sound_tool(actual_combination: str, combination: str) -> int:
+    """Count shared digits, including repeats, regardless of position."""
+    return sum((Counter(actual_combination) & Counter(combination)).values())
 
 
-def crack_backtracking_attempts(
-    score_guess: BacktrackingScoringPort,
-) -> Iterator[Attempt]:
-    """Recover digit counts from overlap, counting repeats in any position.
+def crack_safe(actual_combination: str, on_step=None) -> dict[str, int | float]:
+    """Discover the digits, then backtrack through their permutations."""
+    if (
+        not isinstance(actual_combination, str)
+        or not actual_combination.isascii()
+        or not actual_combination.isdigit()
+    ):
+        raise ValueError("actual_combination must be a non-empty ASCII digit string")
 
-    Test each distinct arrangement with the separate yes/no safe-open signal.
-    """
     started_at = perf_counter()
     attempts = 0
-    digit_counts = [0] * 10
+    length = len(actual_combination)
+    digits = ""
 
-    def record_attempt(guess: str, opened: bool) -> Attempt:
-        nonlocal attempts
+    # Stage 1: discover all digits, including repeats, using sound_tool.
+    for digit in "0123456789":
+        combination = digit * length
+        count = sound_tool(actual_combination, combination)
         attempts += 1
-        return Attempt(
-            attempts=attempts,
-            current_combination=guess,
-            time_taken=perf_counter() - started_at,
-            opened=opened,
-        )
+        digits += digit * count
+        if on_step:
+            on_step(combination, count, "discovery", None, perf_counter() - started_at)
 
-    for digit in range(10):
-        guess = str(digit) * COMBINATION_LENGTH
-        count = score_guess.count_matches(guess)
-        if count == COMBINATION_LENGTH:
-            yield record_attempt(guess, True)
-            return
+    # Stage 2: generate permutations with backtracking and test each full guess.
+    def backtrack(combination: str, remaining: str) -> bool:
+        nonlocal attempts
 
-        digit_counts[digit] = count
-        yield record_attempt(guess, False)
+        if not remaining:
+            attempts += 1
+            if on_step:
+                on_step(
+                    combination, None, "permutation", None, perf_counter() - started_at
+                )
+            return combination == actual_combination
 
-    current = [""] * COMBINATION_LENGTH
-    opened = False
-
-    def search(position: int) -> Iterator[Attempt]:
-        nonlocal opened
-        if opened:
-            return
-
-        if position == COMBINATION_LENGTH:
-            guess = "".join(current)
-            opened = score_guess.opens(guess)
-            yield record_attempt(guess, opened)
-            return
-
-        for digit, count in enumerate(digit_counts):
-            if count == 0:
+        for index, digit in enumerate(remaining):
+            if index > 0 and digit == remaining[index - 1]:
                 continue
 
-            digit_counts[digit] -= 1
-            current[position] = str(digit)
-            yield from search(position + 1)
-            digit_counts[digit] += 1
+            next_remaining = remaining[:index] + remaining[index + 1 :]
+            if backtrack(combination + digit, next_remaining):
+                return True
 
-            if opened:
-                return
+        return False
 
-    yield from search(0)
-
-    if not opened:
+    if not backtrack("", digits):
         raise RuntimeError("backtracking search exhausted without opening the safe")
+
+    return {"attempts": attempts, "time_taken": perf_counter() - started_at}

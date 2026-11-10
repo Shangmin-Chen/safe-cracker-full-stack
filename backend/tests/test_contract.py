@@ -1,12 +1,18 @@
 import math
 import unittest
-from inspect import getsource
+from inspect import getmodule, getsource
 from unittest.mock import patch
 
 from backend.app import app
-from backend.backtracking import crack_backtracking_attempts
-from backend.positional import crack_positional_attempts
-from backend.sound_tool import sound_tool
+from backend.backtracking import (
+    crack_safe as crack_backtracking,
+    sound_tool as backtracking_sound_tool,
+)
+from backend.positional import (
+    crack_safe as crack_positional,
+    sound_tool as positional_sound_tool,
+)
+from backend.regression import crack_safe as crack_regression
 
 
 class CrackSafeContractTests(unittest.TestCase):
@@ -32,30 +38,47 @@ class CrackSafeContractTests(unittest.TestCase):
 
     def test_algorithm_source_uses_the_running_implementation(self):
         for name, implementation in (
-            ("positional", crack_positional_attempts),
-            ("backtracking", crack_backtracking_attempts),
+            ("positional", crack_positional),
+            ("backtracking", crack_backtracking),
+            ("regression", crack_regression),
         ):
             with self.subTest(algorithm=name):
                 response = self.client.get(f"/api/crack_safe/algorithms/{name}/")
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(
                     response.get_json(),
-                    {"algorithm": name, "source": getsource(implementation)},
+                    {"algorithm": name, "source": getsource(getmodule(implementation))},
                 )
 
         response = self.client.get("/api/crack_safe/algorithms/unknown/")
         self.assertEqual(response.status_code, 404)
         self.assertIsInstance(response.get_json()["error"], str)
 
-    def test_both_selected_methods_use_sound_tool_through_their_adapters(self):
+    def test_positional_uses_its_local_sound_tool(self):
         target = "0800666666"
-        for algorithm, options in (("positional", {}), ("backtracking", {"multiset": True})):
-            with self.subTest(algorithm=algorithm):
-                with patch("backend.sound_tool.sound_tool", wraps=sound_tool) as scorer:
-                    response = self.client.post(
-                        "/api/cracksafe/",
-                        json={"actual_combination": target, "algorithm": algorithm},
-                    )
-                    self.assertEqual(response.status_code, 200)
-                    self.assertEqual(response.get_json()["cracked_combination"], target)
-                    scorer.assert_any_call("0000000000", target, **options)
+        with patch(
+            "backend.positional.sound_tool", wraps=positional_sound_tool
+        ) as scorer:
+            response = self.client.post(
+                "/api/cracksafe/",
+                json={"actual_combination": target, "algorithm": "positional"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["cracked_combination"], target)
+        self.assertEqual(response.get_json()["attempts"], scorer.call_count)
+        scorer.assert_any_call(target, "0000000000")
+
+    def test_backtracking_uses_multiset_sound_tool(self):
+        target = "0800666666"
+        with patch(
+            "backend.backtracking.sound_tool", wraps=backtracking_sound_tool
+        ) as scorer:
+            response = self.client.post(
+                "/api/cracksafe/",
+                json={"actual_combination": target, "algorithm": "backtracking"},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["cracked_combination"], target)
+        self.assertEqual(response.get_json()["attempts"], 235)
+        self.assertEqual(scorer.call_count, 10)
+        scorer.assert_any_call(target, "0000000000")

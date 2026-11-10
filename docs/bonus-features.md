@@ -2,16 +2,18 @@
 
 ## Backend
 
-- Positional matching and multiset-guided backtracking use separate scoring ports. Both adapters call the shared Python `sound_tool` for scoring. Backtracking recovers the digit counts, then checks distinct arrangements with a separate yes/no safe-open signal.
-- Server-sent events report the current guess, attempt count, and elapsed time. Positional matching streams every probe. Backtracking samples long runs, always streams the successful probe, and reports the exact final total. See the [HTTP contract](../contracts/crack-safe/README.md).
-- The algorithm source endpoint serves the Python function used by the running server. **Show algorithm** displays the selected method’s source and explanation, or both implementations in **Both** mode.
+- Each algorithm file exposes `sound_tool(actual_combination, combination)` and `crack_safe(actual_combination)`. Positional scoring counts exact-position matches. Backtracking scoring counts shared digits, including repeats. Backtracking first collects all digits using ten scoring probes, then uses a recursive helper to generate permutations without calling `sound_tool` again. An exact equality check simulates the safe opening. Each scoring probe and complete permutation tested counts as one attempt; partial permutations do not. All algorithms return only `attempts` and `time_taken`.
+- Regression is available in the decoder and backend API for locks using each digit `0–9` exactly once. It identifies a combination in at most 45 probes by detecting score regressions and inferring the last remaining candidate. Submitting the inferred code as a separate opening attempt is outside that total.
+- The [backend architecture](backend-architecture.md) connects the algorithms through an injected port and function adapter. Flask handles transport, while the use case handles validation and selection.
+- An optional observer records actual algorithm steps. Server-sent events send those recorded steps and the result after each search completes. Long traces are sampled while preserving exact totals. See the [HTTP contract](../contracts/crack-safe/README.md).
+- The algorithm source endpoint serves the complete Python file used by the running server. **Show algorithm** displays both functions, imports, the method's explanation, and its stages.
 
 ## Frontend
 
 - The mission moves from briefing to suite to safe close-up. The safe hotspot and matched artwork connect the scenes, and the safe opens when the decoder verifies a match.
 - The vault readout accepts up to ten ASCII digits from typing or paste, preserves leading zeros, and requires all ten digits to start. **Random** fills the readout with a valid code.
-- Each method has a separate guess display and activity bar, plus a live attempt count and timer that freeze on a verified match. **Both** runs positional matching first and then backtracking on the same code, with the two panels side by side.
-- Replay appears automatically below the results. Drag the slider to jump to a captured probe or use **Previous** and **Next** to step through the trace. After a **Both** run, each trace remembers its position. Sampled traces show the original probe numbers.
+- The three search methods are Positional matching, Backtracking, and Regression. Each includes an explanation, stages, attempt bound, and example. Regression's **Random** generates a valid permutation of `0–9`.
+- Results show exact attempt totals and algorithm execution time. Step visualization highlights the active position and confirmed digits, shows scoring feedback and the discovered digit pool, and explains each stage. **Previous**, **Next**, **Play steps**, a slider, and playback speed control the recorded trace. Sampled traces show original attempt numbers. Playback does not change execution time or issue additional algorithm calls.
 - The Angular UI calls a gateway port. Its HTTP/SSE adapter handles the Flask protocol, so UI tests can supply a fake gateway to verify result handling and replay independently.
 - **Skip to decoder** provides a direct route from the briefing. Scene transitions and the safe reveal respect reduced motion.
 - Angular Material supplies the decoder controls and dialog. Keyboard focus follows scene changes and returns to the source button when the dialog closes.
@@ -25,12 +27,12 @@
 ## Reproduce a comparison
 
 1. Start the backend and frontend using the [local setup steps](../frontend/README.md#run-locally).
-2. Open the decoder, enter one of the codes below, select **Both**, and crack the safe.
-3. Compare the attempt counts and timings. Switch replay methods and drag the slider to inspect a recorded guess.
+2. Open the decoder, enter one of the codes below, select Positional matching, and crack the safe.
+3. Note the attempt count and timing, then repeat with Backtracking. Use the slider or playback controls to inspect each run.
 
 | Combination | Positional probes | Backtracking probes |
 | --- | ---: | ---: |
-| `0800666666` | 48 | 235 |
-| `0123456789` | 47 | 11 |
+| `0800666666` | 82 | 235 |
+| `0123456789` | 65 | 11 |
 
 Positional matching uses exact-position scores. Backtracking uses multiset scores to recover digit counts and a separate safe-open signal to check their order. Elapsed times vary by run.

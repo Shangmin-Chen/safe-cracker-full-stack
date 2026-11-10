@@ -2,7 +2,7 @@
 
 The Angular frontend for Safe Cracker.
 
-Enter Suite 07 from the briefing and inspect the safe to open the decoder. Enter ten digits in the vault readout and select **Positional matching**, **Backtracking**, or **Both**. A separate display shows the decoder’s guesses. The briefing also offers a direct route to the decoder.
+Enter Suite 07 from the briefing and inspect the safe to open the decoder, or use **Skip to decoder**. Select **Positional matching**, **Backtracking**, or **Regression**. Each method has a brief explanation, stages, an example, and a **Show algorithm** dialog with its complete Python file. Regression requires every digit `0–9` exactly once; **Random** generates a valid permutation for that method.
 
 ## Run locally
 
@@ -40,7 +40,7 @@ npx playwright install chromium
 npm run test:a11y
 ```
 
-The mission UI calls the `CrackSafeGateway` port with the selected algorithm. Angular injects the HTTP/SSE adapter at startup. **Both** calls the gateway once per algorithm with the same combination and shows separate guesses, progress bars, and results side by side. Replay appears automatically with a slider and step controls for each recorded trace. Long backtracking runs sample the progress stream and retain the exact final attempt count. See the [HTTP contract](../contracts/crack-safe/README.md) for the event format.
+The mission UI calls the `CrackSafeGateway` port with the selected algorithm. Angular injects the HTTP/SSE adapter at startup. The backend records actual algorithm steps and sends them when execution completes. **Step visualization** shows the active position, confirmed digits, score feedback, discovered digit pool, and stage explanation. Use **Previous**, **Next**, **Play steps**, the scrubber, and playback speed to inspect the trace. Measured execution time and total attempts stay fixed during playback. Long backtracking traces are labeled as sampled and preserve the original attempt numbers. Regression's final inference is shown without adding another probe. See the [HTTP contract](../contracts/crack-safe/README.md).
 
 ## Scene artwork
 

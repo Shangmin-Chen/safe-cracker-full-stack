@@ -29,6 +29,42 @@ function readTelemetry(data: string) {
   return { fields, attempts, timeTaken };
 }
 
+function readStep(fields: Record<string, unknown>): Partial<CrackProgress> {
+  if (fields['phase'] === undefined) return {};
+  const phases = ['baseline', 'position', 'discovery', 'permutation', 'regression', 'inferred'];
+  const phase = fields['phase'];
+  const score = fields['score'];
+  const baselineScore = fields['baseline_score'];
+  const position = fields['position'];
+  const discoveredDigits = fields['discovered_digits'];
+  const fixedPrefix = fields['fixed_prefix'];
+  const isScore = (value: unknown) =>
+    value === null ||
+    (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10);
+  const isDigits = (value: unknown) => typeof value === 'string' && /^[0-9]{0,10}$/.test(value);
+  if (
+    typeof phase !== 'string' ||
+    !phases.includes(phase) ||
+    !isScore(score) ||
+    !isScore(baselineScore) ||
+    !(
+      position === null ||
+      (typeof position === 'number' && Number.isInteger(position) && position >= 0 && position < 10)
+    ) ||
+    !isDigits(discoveredDigits) ||
+    !isDigits(fixedPrefix)
+  )
+    throw new Error('The decoder sent invalid step details.');
+  return {
+    phase: phase as CrackProgress['phase'],
+    score: score as number | null,
+    baselineScore: baselineScore as number | null,
+    position: position as number | null,
+    discoveredDigits: discoveredDigits as string,
+    fixedPrefix: fixedPrefix as string,
+  };
+}
+
 export class HttpCrackSafeGateway implements CrackSafeGateway {
   async readAlgorithm(algorithm: CrackAlgorithm, signal: AbortSignal): Promise<string> {
     const response = await fetch(`/api/crack_safe/algorithms/${algorithm}/`, { signal });
@@ -80,7 +116,12 @@ export class HttpCrackSafeGateway implements CrackSafeGateway {
 
         const { fields, attempts, timeTaken } = readTelemetry(data);
         if (event === 'progress' && isCombination(fields['current_combination'])) {
-          onProgress({ attempts, timeTaken, currentCombination: fields['current_combination'] });
+          onProgress({
+            attempts,
+            timeTaken,
+            currentCombination: fields['current_combination'],
+            ...readStep(fields),
+          });
           return;
         }
 

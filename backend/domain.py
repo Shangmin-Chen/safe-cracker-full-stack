@@ -1,4 +1,4 @@
-"""Combination validation and attempt data shared by the cracking methods."""
+"""Combination validation and results independent of transport and algorithms."""
 
 from dataclasses import dataclass
 from typing import TypeGuard
@@ -18,8 +18,29 @@ def is_valid_combination(value: object) -> TypeGuard[str]:
 
 
 @dataclass(frozen=True)
-class Attempt:
+class CrackStep:
     attempts: int
     current_combination: str
     time_taken: float
-    opened: bool
+    phase: str
+    score: int | None = None
+    baseline_score: int | None = None
+    position: int | None = None
+    discovered_digits: str = ""
+    fixed_prefix: str = ""
+
+
+@dataclass(frozen=True)
+class CrackMetrics:
+    attempts: int
+    time_taken: float
+    steps: tuple[CrackStep, ...] = ()
+
+
+@dataclass(frozen=True)
+class CrackResult:
+    attempts: int
+    time_taken: float
+    cracked_combination: str
+    success: bool = True
+    steps: tuple[CrackStep, ...] = ()

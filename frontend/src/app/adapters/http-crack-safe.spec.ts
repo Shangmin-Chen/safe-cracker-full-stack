@@ -69,6 +69,68 @@ describe('HTTP crack safe gateway', () => {
     ).rejects.toThrow('ended before a result arrived');
   });
 
+  it('preserves regression inference details without adding another attempt', async () => {
+    const step = {
+      attempts: 45,
+      current_combination: '9876543210',
+      time_taken: 0.001,
+      phase: 'inferred',
+      score: null,
+      baseline_score: null,
+      position: null,
+      discovered_digits: '',
+      fixed_prefix: '9876543210',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          streamResponse(
+            'event: progress\ndata: ' +
+              JSON.stringify(step) +
+              '\n\n' +
+              'event: result\ndata: {"attempts":45,"cracked_combination":"9876543210","time_taken":0.001,"success":true}\n\n',
+          ),
+        ),
+    );
+    const onProgress = vi.fn();
+    const result = await gateway.run(
+      '9876543210',
+      'regression',
+      onProgress,
+      new AbortController().signal,
+    );
+    expect(result.attempts).toBe(45);
+    expect(onProgress).toHaveBeenCalledWith({
+      attempts: 45,
+      currentCombination: '9876543210',
+      timeTaken: 0.001,
+      phase: 'inferred',
+      score: null,
+      baselineScore: null,
+      position: null,
+      discoveredDigits: '',
+      fixedPrefix: '9876543210',
+    });
+  });
+
+  it('rejects malformed step feedback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          streamResponse(
+            'event: progress\ndata: {"attempts":1,"current_combination":"1000000000","time_taken":0,"phase":"regression","score":11}\n\n',
+          ),
+        ),
+    );
+    await expect(
+      gateway.run('9876543210', 'regression', vi.fn(), new AbortController().signal),
+    ).rejects.toThrow('invalid step details');
+  });
+
   it('surfaces the server message for a rejected request', async () => {
     const response = Response.json({ error: 'Invalid combination.' }, { status: 400 });
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));

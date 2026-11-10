@@ -1,78 +1,50 @@
 import unittest
+from unittest.mock import patch
 
-from backend.positional import crack_positional, crack_positional_attempts
-from backend.sound_tool import SimulatedPositionalSoundTool
-
-
-class FakePositionalScorer:
-    def __init__(self, target: str) -> None:
-        self.target = target
-        self.guesses: list[str] = []
-
-    def __call__(self, guess: str) -> int:
-        self.guesses.append(guess)
-        return sum(guess[index] == digit for index, digit in enumerate(self.target))
+from backend.positional import crack_safe, sound_tool
 
 
 class PositionalTests(unittest.TestCase):
+    def test_sound_tool_counts_only_exact_position_matches(self):
+        self.assertEqual(sound_tool("0900", "9888"), 0)
+        self.assertEqual(sound_tool("0900", "8988"), 1)
+        self.assertEqual(sound_tool("0900", "0900"), 4)
+        self.assertEqual(sound_tool("0900", "9000"), 2)
+
+    def test_sound_tool_rejects_different_combination_lengths(self):
+        with self.assertRaises(ValueError):
+            sound_tool("0900", "090")
+
     def test_all_zero_combination_opens_on_initial_guess(self):
-        scorer = FakePositionalScorer("0000000000")
-        result = crack_positional(scorer)
+        with patch("backend.positional.sound_tool", wraps=sound_tool) as scorer:
+            result = crack_safe("0000")
 
-        self.assertEqual(scorer.guesses, ["0000000000"])
-        self.assertEqual(result.attempts, 1)
-        self.assertEqual(result.current_combination, "0000000000")
-        self.assertTrue(result.opened)
-        self.assertGreaterEqual(result.time_taken, 0)
+        scorer.assert_called_once_with("0000", "0000")
+        self.assertEqual(result["attempts"], 1)
+        self.assertEqual(set(result), {"attempts", "time_taken"})
+        self.assertGreaterEqual(result["time_taken"], 0)
 
-    def test_preserves_leading_zeroes(self):
-        result = crack_positional(FakePositionalScorer("0800666666"))
+    def test_attempts_count_every_sound_tool_call_including_success(self):
+        for target in ("0", "9", "0900", "0800666666", "3141592653"):
+            with self.subTest(target=target):
+                with patch("backend.positional.sound_tool", wraps=sound_tool) as scorer:
+                    result = crack_safe(target)
 
-        self.assertTrue(result.opened)
-        self.assertEqual(result.current_combination, "0800666666")
-        self.assertLessEqual(result.attempts, 91)
+                self.assertEqual(result["attempts"], scorer.call_count)
+                self.assertLessEqual(result["attempts"], 1 + 10 * len(target))
+                self.assertEqual(scorer.call_args.args, (target, target))
+                self.assertGreaterEqual(result["time_taken"], 0)
 
-    def test_all_nines_requires_at_most_91_attempts(self):
-        scorer = FakePositionalScorer("9999999999")
-        result = crack_positional(scorer)
+    def test_all_nines_requires_101_attempts(self):
+        result = crack_safe("9999999999")
 
-        self.assertTrue(result.opened)
-        self.assertEqual(result.current_combination, "9999999999")
-        self.assertEqual(result.attempts, 91)
-        self.assertEqual(result.attempts, len(scorer.guesses))
+        self.assertEqual(result["attempts"], 101)
 
-    def test_attempt_stream_counts_each_probe_and_ends_at_the_secret(self):
-        scorer = FakePositionalScorer("3141592653")
-        attempts = list(crack_positional_attempts(scorer))
-
-        self.assertEqual(
-            [attempt.current_combination for attempt in attempts], scorer.guesses
-        )
-        self.assertGreater(len(attempts), 1)
-        self.assertLessEqual(len(attempts), 91)
-        self.assertEqual(
-            [attempt.attempts for attempt in attempts],
-            list(range(1, len(attempts) + 1)),
-        )
-        self.assertEqual(attempts[0].current_combination, "0000000000")
-        self.assertEqual(attempts[-1].current_combination, "3141592653")
-        self.assertTrue(attempts[-1].opened)
-        self.assertTrue(all(not attempt.opened for attempt in attempts[:-1]))
-
-    def test_simulated_positional_sound_tool_rejects_invalid_combinations(self):
-        invalid_values = (
-            "123",
-            "12345678901",
-            "123456789x",
-            "１２３４５６７８９０",
-            1234567890,
-            None,
-        )
-
-        for combination in invalid_values:
+    def test_rejects_invalid_combinations(self):
+        for combination in ("", "123x", "１２３４", 1234567890, None):
             with self.subTest(combination=combination):
                 with self.assertRaises(ValueError):
-                    SimulatedPositionalSoundTool(combination)
+                    crack_safe(combination)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,17 @@
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CRACK_SAFE_GATEWAY } from '../crack-safe.token';
-import type { CrackAlgorithm, CrackProgress, CrackResult } from '../application/crack-safe';
+import {
+  isPermutation,
+  type CrackAlgorithm,
+  type CrackProgress,
+  type CrackResult,
+} from '../application/crack-safe';
 import { Mission } from './mission';
 
 describe('Mission', () => {
+  afterEach(() => vi.useRealTimers());
+
   function setup(run: ReturnType<typeof vi.fn>, startAtDecoder = true, readAlgorithm = vi.fn()) {
     TestBed.configureTestingModule({
       imports: [Mission],
@@ -19,233 +26,248 @@ describe('Mission', () => {
     return fixture;
   }
 
-  it('moves from the briefing to the safe and shows replay in the decoder after a verified result', async () => {
-    const run = vi.fn(
+  function successfulRun(steps?: CrackProgress[], attempts = 82) {
+    return vi.fn(
       async (
         target: string,
         _algorithm: CrackAlgorithm,
-        onProgress: (progress: CrackProgress) => void,
+        onProgress: (step: CrackProgress) => void,
       ) => {
-        onProgress({ attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 });
-        return { attempts: 48, crackedCombination: target, timeTaken: 0.001, success: true };
+        for (const step of steps ?? [
+          { attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 },
+          { attempts, currentCombination: target, timeTaken: 0.001 },
+        ])
+          onProgress(step);
+        return { attempts, crackedCombination: target, timeTaken: 0.001, success: true };
       },
     );
-    const fixture = setup(run, false);
+  }
+
+  it('moves from the briefing to the safe and presents recorded steps after a result', async () => {
+    const fixture = setup(successfulRun(), false);
     const mission = fixture.componentInstance;
     const element = fixture.nativeElement as HTMLElement;
     expect(element.querySelector('form')).toBeNull();
-    expect(element.textContent).toContain('Enter the suite');
-
-    element.querySelector<HTMLButtonElement>('.briefing .story-action')?.click();
+    element.querySelector<HTMLButtonElement>('.briefing .story-action')!.click();
     fixture.detectChanges();
-    expect(element.textContent).toContain('Inspect the safe');
-    element.querySelector<HTMLButtonElement>('.safe-hotspot')?.click();
+    element.querySelector<HTMLButtonElement>('.safe-hotspot')!.click();
     fixture.detectChanges();
-    expect(element.querySelector('form')).not.toBeNull();
-
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    expect(mission.scene()).toBe('decoder');
-    expect(element.querySelector('#replay-title')?.textContent).toBe('Decoder replay');
-    expect(element.textContent).toContain('0800666666');
-
+    expect(element.querySelector('#replay-title')?.textContent).toBe('Step visualization');
+    expect(element.textContent).toContain('Matches target');
     mission.goToScene('suite');
-    expect(mission.scene()).toBe('suite');
     expect(mission.result()).toBeNull();
   });
 
-  it('preserves leading zeros and keeps final statistics fixed during manual replay', async () => {
-    const first = { attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 };
-    const last = { attempts: 48, currentCombination: '0800666666', timeTaken: 0.00042 };
-    const result = {
-      attempts: 48,
-      crackedCombination: '0800666666',
-      timeTaken: 0.00042,
-      success: true,
-    };
-    const run = vi.fn(
-      async (
-        _target: string,
-        _algorithm: CrackAlgorithm,
-        onProgress: (progress: CrackProgress) => void,
-        _signal: AbortSignal,
-      ) => {
-        onProgress(first);
-        onProgress(last);
-        return result;
-      },
-    );
-    const fixture = setup(run);
+  it('offers exactly the three algorithms and resets the previous run when switching', async () => {
+    const fixture = setup(successfulRun());
     const mission = fixture.componentInstance;
-
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    expect(run.mock.calls[0][0]).toBe('0800666666');
-    expect(run.mock.calls[0][1]).toBe('positional');
-    expect(mission.phase()).toBe('opened');
-    expect(fixture.nativeElement.textContent).toContain('Matches target');
+    expect(mission.searchModes).toEqual(['positional', 'backtracking', 'regression']);
+    expect(fixture.nativeElement.querySelectorAll('.algorithm-row button')).toHaveLength(3);
+    fixture.nativeElement.querySelector('button[value="backtracking"]').click();
+    fixture.detectChanges();
+    expect(mission.algorithm()).toBe('backtracking');
+    expect(mission.result()).toBeNull();
+    expect(mission.replayRun()).toBeUndefined();
+    expect(fixture.nativeElement.textContent).toContain('Discover the digits');
+    expect(fixture.nativeElement.textContent).toContain('Backtrack through permutations');
+  });
 
-    const replayGuess = () =>
-      fixture.nativeElement.querySelector('.replay-guess code')?.textContent;
-    expect(replayGuess()).toBe(first.currentCombination);
+  it('keeps final attempts and execution time fixed during replay', async () => {
+    const fixture = setup(successfulRun());
+    const mission = fixture.componentInstance;
+    await mission.start(new Event('submit'));
+    fixture.detectChanges();
+    const guess = () =>
+      [...fixture.nativeElement.querySelectorAll('.digit-grid li')]
+        .map((cell: unknown) => (cell as HTMLElement).textContent?.trim())
+        .join('');
+    expect(guess()).toBe('0000000000');
     mission.moveReplay(1);
     fixture.detectChanges();
-    expect(replayGuess()).toBe(last.currentCombination);
-    expect(mission.result()).toEqual(result);
-    expect(mission.telemetry()[0].attempts).toBe(48);
-    expect(mission.telemetry()[0].seconds).toBe(0.00042);
+    expect(guess()).toBe('0800666666');
+    expect(mission.telemetry()[0].attempts).toBe(82);
+    expect(mission.telemetry()[0].seconds).toBe(0.001);
+    expect(fixture.nativeElement.textContent).toContain('Execution time');
   });
 
-  it('preserves the completed method if the second run fails', async () => {
-    const positional = {
-      attempts: 48,
-      crackedCombination: '0800666666',
-      timeTaken: 0.001,
-      success: true,
-    };
-    const run = vi
-      .fn()
-      .mockImplementationOnce(
-        async (
-          _target: string,
-          _algorithm: CrackAlgorithm,
-          onProgress: (progress: CrackProgress) => void,
-        ) => {
-          onProgress({ attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 });
-          return positional;
-        },
-      )
-      .mockRejectedValueOnce(new Error('Interrupted'));
+  it('enforces the regression constraint and generates valid examples and random codes', async () => {
+    const run = successfulRun(undefined, 45);
     const fixture = setup(run);
     const mission = fixture.componentInstance;
-    mission.updateAlgorithm('both');
-
+    mission.updateAlgorithm('regression');
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    expect(run.mock.calls.map(([code, algorithm]) => [code, algorithm])).toEqual([
-      ['0800666666', 'positional'],
-      ['0800666666', 'backtracking'],
-    ]);
-    expect(mission.phase()).toBe('error');
-    expect(mission.result()).toEqual(positional);
-    expect(mission.replayRun()?.algorithm).toBe('positional');
-    expect(fixture.nativeElement.textContent).toContain('Positional matching completed');
+    expect(run).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain(
+      'each digit 0–9 exactly once',
+    );
+    mission.useExample();
+    expect(mission.target()).toBe('9876543210');
+    await mission.start(new Event('submit'));
+    expect(run.mock.calls[0][1]).toBe('regression');
+    mission.randomize();
+    expect(isPermutation(mission.target())).toBe(true);
+    expect(mission.result()).toBeNull();
   });
 
-  it('rejects invalid input and reports connection failures without marking valid input invalid', async () => {
+  it('shows discovery and permutation as separate backtracking stages', async () => {
+    const target = '0100000000';
+    const steps: CrackProgress[] = [
+      {
+        attempts: 1,
+        currentCombination: '0000000000',
+        timeTaken: 0.00001,
+        phase: 'discovery',
+        score: 9,
+        discoveredDigits: '000000000',
+      },
+      {
+        attempts: 2,
+        currentCombination: '1111111111',
+        timeTaken: 0.00002,
+        phase: 'discovery',
+        score: 1,
+        discoveredDigits: '0000000001',
+      },
+      {
+        attempts: 19,
+        currentCombination: target,
+        timeTaken: 0.001,
+        phase: 'permutation',
+        score: null,
+        discoveredDigits: '0000000001',
+      },
+    ];
+    const fixture = setup(successfulRun(steps, 19));
+    const mission = fixture.componentInstance;
+    mission.updateAlgorithm('backtracking');
+    mission.target.set(target);
+    await mission.start(new Event('submit'));
+    fixture.detectChanges();
+    expect(mission.stepStage()).toContain('Stage 1');
+    expect(fixture.nativeElement.textContent).toContain('Discovered digits');
+    mission.seekReplay(2);
+    fixture.detectChanges();
+    expect(mission.stepStage()).toContain('Stage 2');
+    expect(mission.stepExplanation()).toContain('safe opens');
+    expect(fixture.nativeElement.querySelector('.digit-pool code').textContent).toBe('0000000001');
+  });
+
+  it('visualizes regression inference without charging an extra attempt', async () => {
+    const steps: CrackProgress[] = [
+      {
+        attempts: 1,
+        currentCombination: '1000000000',
+        timeTaken: 0.00001,
+        phase: 'regression',
+        score: 1,
+        baselineScore: 1,
+        position: 0,
+        fixedPrefix: '',
+      },
+      {
+        attempts: 45,
+        currentCombination: '9876543210',
+        timeTaken: 0.001,
+        phase: 'inferred',
+        score: null,
+        fixedPrefix: '9876543210',
+      },
+    ];
+    const fixture = setup(successfulRun(steps, 45));
+    const mission = fixture.componentInstance;
+    mission.updateAlgorithm('regression');
+    mission.useExample();
+    await mission.start(new Event('submit'));
+    mission.seekReplay(1);
+    fixture.detectChanges();
+    expect(mission.stepStage()).toBe('Code inferred');
+    expect(mission.stepExplanation()).toContain('without adding another scoring attempt');
+    expect(fixture.nativeElement.querySelectorAll('.digit-fixed')).toHaveLength(10);
+    expect(mission.telemetry()[0].attempts).toBe(45);
+  });
+
+  it('plays, pauses, changes speed, and stops at the final recorded step', async () => {
+    vi.useFakeTimers();
+    const steps = [1, 2, 3].map((attempts) => ({
+      attempts,
+      currentCombination: '0000000000',
+      timeTaken: attempts / 10000,
+    }));
+    const fixture = setup(successfulRun(steps, 3));
+    const mission = fixture.componentInstance;
+    await mission.start(new Event('submit'));
+    mission.togglePlayback();
+    vi.advanceTimersByTime(500);
+    expect(mission.replayIndex()).toBe(1);
+    mission.togglePlayback();
+    vi.advanceTimersByTime(1000);
+    expect(mission.replayIndex()).toBe(1);
+    mission.playbackSpeed.set(2);
+    mission.togglePlayback();
+    vi.advanceTimersByTime(250);
+    expect(mission.replayIndex()).toBe(2);
+    expect(mission.replayPlaying()).toBe(false);
+    expect(mission.result()?.timeTaken).toBe(0.001);
+    fixture.destroy();
+  });
+
+  it('shows sampled traces with original attempt numbers and exact final totals', async () => {
+    const steps = [1, 4096, 4097].map((attempts) => ({
+      attempts,
+      currentCombination: '0000000000',
+      timeTaken: attempts / 10000,
+    }));
+    const fixture = setup(successfulRun(steps, 4097));
+    const mission = fixture.componentInstance;
+    await mission.start(new Event('submit'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Sampled replay');
+    expect(fixture.nativeElement.textContent).toContain('3 recorded steps from 4097 attempts');
+    mission.seekReplay(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Attempt 4096 of 4097');
+    expect(mission.telemetry()[0].attempts).toBe(4097);
+  });
+
+  it('loads the selected complete Python file with its explanation', async () => {
+    const code =
+      'from time import perf_counter\n\ndef sound_tool(actual, guess): pass\n\ndef crack_safe(actual): pass';
+    const readAlgorithm = vi.fn().mockResolvedValue(code);
+    const fixture = setup(successfulRun(), true, readAlgorithm);
+    const mission = fixture.componentInstance;
+    mission.updateAlgorithm('regression');
+    await mission.showAlgorithm();
+    fixture.detectChanges();
+    expect(readAlgorithm).toHaveBeenCalledWith('regression', expect.any(AbortSignal));
+    expect(document.querySelector('.source-filename code')?.textContent).toBe(
+      'backend/regression.py',
+    );
+    expect(document.querySelector('mat-dialog-container pre code')?.textContent).toBe(code);
+    expect(document.querySelector('mat-dialog-container')?.textContent).toContain(
+      'Eliminate candidates',
+    );
+  });
+
+  it('rejects malformed input and surfaces connection failures', async () => {
     const run = vi.fn().mockRejectedValue(new Error('The decoder could not connect.'));
     const fixture = setup(run);
     const mission = fixture.componentInstance;
     mission.target.set('１２３４５６７８９０');
-
     await mission.start(new Event('submit'));
     fixture.detectChanges();
-    const input = fixture.nativeElement.querySelector('input') as HTMLInputElement;
     expect(run).not.toHaveBeenCalled();
-    expect(input.getAttribute('aria-invalid')).toBe('true');
-
+    expect(fixture.nativeElement.querySelector('input').getAttribute('aria-invalid')).toBe('true');
     mission.target.set('0800666666');
     await mission.start(new Event('submit'));
     fixture.detectChanges();
     expect(mission.phase()).toBe('error');
-    expect(input.hasAttribute('aria-invalid')).toBe(false);
+    expect(fixture.nativeElement.querySelector('input').hasAttribute('aria-invalid')).toBe(false);
     expect(fixture.nativeElement.textContent).toContain('The decoder could not connect.');
-  });
-
-  it('switches algorithms, explains each method, and clears the previous result', async () => {
-    const run = vi.fn(
-      async (
-        _target: string,
-        _algorithm: CrackAlgorithm,
-        onProgress: (progress: CrackProgress) => void,
-        _signal: AbortSignal,
-      ) => {
-        onProgress({ attempts: 1, currentCombination: '0000000000', timeTaken: 0.00001 });
-        return {
-          attempts: 1,
-          crackedCombination: '0800666666',
-          timeTaken: 0.00001,
-          success: true,
-        };
-      },
-    );
-    const implementation = 'def crack_backtracking_attempts(port):\n    yield from search(port)\n';
-    const readAlgorithm = vi.fn().mockResolvedValue(implementation);
-    const fixture = setup(run, true, readAlgorithm);
-    const mission = fixture.componentInstance;
-    const element = fixture.nativeElement as HTMLElement;
-    const backtracking = element.querySelector<HTMLButtonElement>('button[value="backtracking"]')!;
-
-    expect(mission.algorithm()).toBe('positional');
-    await mission.start(new Event('submit'));
-    expect(mission.phase()).toBe('opened');
-    expect(mission.replayIndex()).toBe(0);
-
-    backtracking.click();
-    fixture.detectChanges();
-    expect(mission.algorithm()).toBe('backtracking');
-    expect(mission.phase()).toBe('ready');
-    expect(mission.result()).toBeNull();
-    expect(mission.runs()).toEqual([]);
-    expect(mission.replayRun()).toBeUndefined();
-
-    await mission.showAlgorithm();
-    fixture.detectChanges();
-    expect(readAlgorithm).toHaveBeenCalledWith('backtracking', expect.any(AbortSignal));
-    expect(document.querySelector('mat-dialog-container pre code')?.textContent).toBe(
-      implementation,
-    );
-
-    await mission.start(new Event('submit'));
-    expect(run.mock.calls.map(([target, algorithm]) => [target, algorithm])).toEqual([
-      ['0800666666', 'positional'],
-      ['0800666666', 'backtracking'],
-    ]);
-  });
-
-  it('labels replay checkpoints as sampled and keeps final statistics exact', async () => {
-    const result = {
-      attempts: 4097,
-      crackedCombination: '0800666666',
-      timeTaken: 0.41,
-      success: true,
-    };
-    const run = vi.fn(
-      async (
-        target: string,
-        _algorithm: CrackAlgorithm,
-        onProgress: (progress: CrackProgress) => void,
-        _signal: AbortSignal,
-      ) => {
-        const attempts = [...Array.from({ length: 128 }, (_, index) => index + 1), 4096, 4097];
-        for (const attempt of attempts) {
-          onProgress({
-            attempts: attempt,
-            currentCombination: attempt === 4097 ? target : '0000000000',
-            timeTaken: attempt / 10_000,
-          });
-        }
-        return result;
-      },
-    );
-    const fixture = setup(run);
-    const mission = fixture.componentInstance;
-
-    await mission.start(new Event('submit'));
-    fixture.detectChanges();
-    expect(mission.replayRun()?.probes).toHaveLength(130);
-    expect(mission.result()).toEqual(result);
-    expect(mission.telemetry()[0].attempts).toBe(4097);
-
-    expect(fixture.nativeElement.textContent).toContain('Sampled replay');
-    expect(fixture.nativeElement.textContent).toContain('130 recorded probes from 4097 attempts');
-    expect(fixture.nativeElement.textContent).toContain('Probe 1 of 4097');
-
-    mission.seekReplay(128);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Probe 4096 of 4097');
-    expect(mission.telemetry()[0].attempts).toBe(4097);
-    expect(mission.telemetry()[0].seconds).toBe(0.41);
   });
 
   it('blocks duplicate submissions and aborts an active request on destruction', async () => {
@@ -254,7 +276,7 @@ describe('Mission', () => {
       (
         _target: string,
         _algorithm: CrackAlgorithm,
-        _onProgress: (progress: CrackProgress) => void,
+        _progress: (step: CrackProgress) => void,
         _signal: AbortSignal,
       ) =>
         new Promise<CrackResult>((resolve) => {
@@ -264,17 +286,11 @@ describe('Mission', () => {
     const fixture = setup(run);
     const mission = fixture.componentInstance;
     const pending = mission.start(new Event('submit'));
-
     await mission.start(new Event('submit'));
-    expect(run).toHaveBeenCalledTimes(1);
     fixture.detectChanges();
-    const button = fixture.nativeElement.querySelector(
-      'button[value="backtracking"]',
-    ) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    button.click();
-    expect(mission.algorithm()).toBe('positional');
-    const signal = run.mock.calls[0][3] as AbortSignal;
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(fixture.nativeElement.querySelector('button[value="regression"]').disabled).toBe(true);
+    const signal = run.mock.calls[0][3];
     fixture.destroy();
     expect(signal.aborted).toBe(true);
     finish({ attempts: 1, crackedCombination: '0800666666', timeTaken: 0.001, success: true });

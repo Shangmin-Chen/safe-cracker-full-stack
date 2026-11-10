@@ -1,71 +1,53 @@
-"""Positional search for a ten-digit safe combination."""
-
-from collections.abc import Iterator
 from time import perf_counter
-from typing import Protocol
-
-from .domain import COMBINATION_LENGTH, Attempt
 
 
-class PositionalScoringPort(Protocol):
-    def __call__(self, guess: str, /) -> int:
-        """Return the number of digits in the correct positions."""
-        ...
+def sound_tool(actual_combination: str, combination: str) -> int:
+    """Return the number of digits that match in the same position."""
+    return sum(
+        actual == guessed
+        for actual, guessed in zip(actual_combination, combination, strict=True)
+    )
 
 
-def crack_positional_attempts(score_guess: PositionalScoringPort) -> Iterator[Attempt]:
-    """Find the combination from exact-position match counts.
+def crack_safe(actual_combination: str, on_step=None) -> dict[str, int | float]:
+    """Crack the safe; each sound_tool call counts as one attempt."""
+    if (
+        not isinstance(actual_combination, str)
+        or not actual_combination.isascii()
+        or not actual_combination.isdigit()
+    ):
+        raise ValueError("actual_combination must be a non-empty ASCII digit string")
 
-    Change one digit at a time and compare the new score with the previous one.
-    """
     started_at = perf_counter()
-    attempts = 0
-    current = ["0"] * COMBINATION_LENGTH
-
-    def probe(guess: str) -> tuple[int, Attempt]:
-        nonlocal attempts
-        score = score_guess(guess)
-        attempts += 1
-        attempt = Attempt(
-            attempts=attempts,
-            current_combination=guess,
-            time_taken=perf_counter() - started_at,
-            opened=score == COMBINATION_LENGTH,
+    combination = ["0"] * len(actual_combination)
+    score = sound_tool(actual_combination, "".join(combination))
+    attempts = 1
+    if on_step:
+        on_step(
+            "".join(combination), score, "baseline", None, perf_counter() - started_at
         )
-        return score, attempt
 
-    score, attempt = probe("".join(current))
-    yield attempt
-    if attempt.opened:
-        return
+    for position in range(len(combination)):
+        if score == len(combination):
+            break
 
-    for position in range(COMBINATION_LENGTH):
-        for digit in "123456789":
-            current[position] = digit
-            new_score, attempt = probe("".join(current))
-            yield attempt
-
-            if attempt.opened:
-                return
+        for digit in "0123456789":
+            trial = combination.copy()
+            trial[position] = digit
+            new_score = sound_tool(actual_combination, "".join(trial))
+            attempts += 1
+            if on_step:
+                on_step(
+                    "".join(trial),
+                    new_score,
+                    "position",
+                    position,
+                    perf_counter() - started_at,
+                )
 
             if new_score > score:
+                combination = trial
                 score = new_score
                 break
 
-            if new_score < score:
-                current[position] = "0"
-                break
-
-    raise RuntimeError("positional search exhausted without opening the safe")
-
-
-def crack_positional(score_guess: PositionalScoringPort) -> Attempt:
-    """Run the probe sequence and return the successful attempt."""
-    final_attempt = None
-    for attempt in crack_positional_attempts(score_guess):
-        final_attempt = attempt
-
-    if final_attempt is None or not final_attempt.opened:
-        raise RuntimeError("positional search exhausted without opening the safe")
-
-    return final_attempt
+    return {"attempts": attempts, "time_taken": perf_counter() - started_at}

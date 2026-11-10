@@ -84,20 +84,30 @@
           <div class="decoder-console">
             <div class="console-heading">
               <h1 #sceneTitle tabindex="-1">Acoustic decoder</h1>
-              <span class="method-label">{{ algorithmLabel() }}</span>
+              <span class="method-label">Three ways into the safe</span>
             </div>
 
             <form (submit)="start($event)" novalidate>
               <div class="target-heading">
                 <label class="input-label" for="vault-combination">Vault combination</label>
-                <button
-                  matButton
-                  type="button"
-                  (click)="randomize()"
-                  [disabled]="phase() === 'running'"
-                >
-                  Random
-                </button>
+                <div class="target-actions">
+                  <button
+                    matButton
+                    type="button"
+                    (click)="useExample()"
+                    [disabled]="phase() === 'running'"
+                  >
+                    Use example
+                  </button>
+                  <button
+                    matButton
+                    type="button"
+                    (click)="randomize()"
+                    [disabled]="phase() === 'running'"
+                  >
+                    Random
+                  </button>
+                </div>
               </div>
               <div class="target-readout">
                 <input
@@ -117,7 +127,8 @@
                   "
                 />
               </div>
-              <p id="combination-hint" class="input-hint">Enter 10 digits.</p>
+              <p id="combination-hint" class="input-hint">{{ algorithmInfo().hint }}</p>
+
               <div class="algorithm-heading">
                 <span id="algorithm-label" class="input-label">Search method</span>
                 <button matButton type="button" aria-haspopup="dialog" (click)="showAlgorithm()">
@@ -141,6 +152,15 @@
                   </button>
                 }
               </div>
+              <div class="method-overview" [attr.aria-label]="algorithmLabel() + ' explanation'">
+                <p>{{ algorithmInfo().summary }}</p>
+                <ol class="method-stages">
+                  @for (stage of algorithmInfo().stages; track $index) {
+                    <li>{{ stage }}</li>
+                  }
+                </ol>
+                <p class="attempt-bound">{{ algorithmInfo().limit }}</p>
+              </div>
               @if (error()) {
                 <p id="input-error" class="error-message" role="alert">{{ error() }}</p>
               }
@@ -152,7 +172,7 @@
               >
                 <span>{{
                   phase() === 'running'
-                    ? 'Decoding…'
+                    ? 'Computing…'
                     : phase() === 'opened'
                       ? 'Crack again'
                       : 'Crack safe'
@@ -167,23 +187,16 @@
                 @let source = algorithmSource();
                 @if (source.status === 'ready') {
                   @for (entry of source.entries; track entry.algorithm) {
-                    @if (source.entries.length > 1) {
-                      <h3 class="algorithm-source-heading">{{ methodNames[entry.algorithm] }}</h3>
-                    }
-                    @if (entry.algorithm === 'positional') {
-                      <p>
-                        <code>sound_tool</code> counts digits that are correct and in the correct
-                        position. The solver starts with ten zeros and changes one digit at a time,
-                        using changes in the score to identify the correct digit.
-                      </p>
-                    } @else {
-                      <p>
-                        <code>sound_tool</code> reports how many digits the guess shares with the
-                        secret, counting repeats regardless of position. The solver learns the digit
-                        counts, tries distinct arrangements, and checks each complete guess with a
-                        separate yes/no safe-open signal.
-                      </p>
-                    }
+                    <p class="source-filename">
+                      <code>backend/{{ entry.algorithm }}.py</code> · complete file
+                    </p>
+                    <p>{{ info[entry.algorithm].summary }}</p>
+                    <ol class="source-stages">
+                      @for (stage of info[entry.algorithm].stages; track $index) {
+                        <li>{{ stage }}</li>
+                      }
+                    </ol>
+                    <p>{{ info[entry.algorithm].limit }}</p>
                     <pre
                       class="algorithm-code"
                       tabindex="0"
@@ -204,134 +217,172 @@
             </ng-template>
 
             <section class="telemetry" aria-labelledby="telemetry-title">
-              @let comparing = algorithm() === 'both';
               <h2 id="telemetry-title">
-                @if (comparing) {
-                  {{ result() ? 'Method comparison' : 'Decoder telemetry' }}
-                } @else {
-                  {{ result() ? 'Recovered combination' : 'Current guess' }}
-                }
+                {{ result() ? 'Recovered combination' : 'Decoder status' }}
               </h2>
-              <div class="telemetry-grid" [class.telemetry-pair]="comparing">
-                @for (method of telemetry(); track method.algorithm) {
-                  <div
-                    class="method-telemetry"
-                    role="group"
-                    [attr.aria-label]="methodNames[method.algorithm]"
-                  >
-                    @if (comparing) {
-                      <h3>{{ methodNames[method.algorithm] }}</h3>
-                    }
-                    <p class="run-status">{{ method.status }}</p>
-                    <div class="guess-tape">
-                      <code>{{ method.guess }}</code>
-                    </div>
-                    <mat-progress-bar
-                      class="run-progress"
-                      [mode]="method.status === 'Live' ? 'indeterminate' : 'determinate'"
-                      [value]="method.status === 'Opened' ? 100 : 0"
-                      [attr.aria-label]="methodNames[method.algorithm] + ' progress'"
-                    />
-                    <dl class="run-metrics">
-                      <div>
-                        <dt>Attempts</dt>
-                        <dd>{{ method.attempts }}</dd>
-                      </div>
-                      <div>
-                        <dt>Elapsed</dt>
-                        <dd>
-                          @if (method.seconds !== undefined) {
-                            {{ formatTime(method.seconds) }}<span class="metric-unit"> s</span>
-                          } @else {
-                            —
-                          }
-                        </dd>
-                      </div>
-                    </dl>
+              @for (method of telemetry(); track method.algorithm) {
+                <div
+                  class="method-telemetry"
+                  role="group"
+                  [attr.aria-label]="methodNames[method.algorithm]"
+                >
+                  <p class="run-status">{{ method.status }}</p>
+                  <div class="guess-tape">
+                    <code>{{ method.guess }}</code>
                   </div>
-                }
-              </div>
+                  <mat-progress-bar
+                    class="run-progress"
+                    [mode]="phase() === 'running' ? 'indeterminate' : 'determinate'"
+                    [value]="result() ? 100 : 0"
+                    [attr.aria-label]="methodNames[method.algorithm] + ' progress'"
+                  />
+                  <dl class="run-metrics">
+                    <div>
+                      <dt>Attempts</dt>
+                      <dd>{{ method.attempts }}</dd>
+                    </div>
+                    <div>
+                      <dt>Execution time</dt>
+                      <dd>
+                        @if (method.seconds !== undefined) {
+                          {{ formatTime(method.seconds) }}<span class="metric-unit"> s</span>
+                        } @else {
+                          —
+                        }
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              }
               @if (result()) {
                 <p class="success-summary" role="status">
                   <span aria-hidden="true">✓</span> Matches target
-                  @if (phase() === 'error') {
-                    · {{ methodNames[runs()[0].algorithm] }} completed
-                  }
                 </p>
-              } @else if (phase() !== 'error') {
-                <p class="telemetry-note">{{ telemetryNote() }}</p>
+              } @else if (phase() === 'running') {
+                <p class="telemetry-note" role="status">
+                  Computing the algorithm · {{ waitingSeconds().toFixed(1) }} s waiting
+                </p>
+              } @else {
+                <p class="telemetry-note">Run a method to inspect its recorded steps below.</p>
               }
             </section>
 
             @if (replayRun(); as replay) {
-              @let attempt = replay.probes[replayIndex()];
-              <section class="replay-panel" aria-labelledby="replay-title">
-                <h2 id="replay-title">Decoder replay</h2>
-                @if (replayRuns().length > 1) {
-                  <div class="replay-methods" role="group" aria-label="Replay method">
-                    @for (run of replayRuns(); track run.algorithm) {
-                      <button
-                        [matButton]="run.algorithm === replay.algorithm ? 'tonal' : 'outlined'"
-                        type="button"
-                        [attr.aria-pressed]="run.algorithm === replay.algorithm"
-                        (click)="selectReplay(run.algorithm)"
-                      >
-                        {{ methodNames[run.algorithm] }}
-                      </button>
-                    }
+              @if (replayStep(); as step) {
+                <section class="replay-panel" aria-labelledby="replay-title">
+                  <div class="replay-heading">
+                    <h2 id="replay-title">Step visualization</h2>
+                    <span class="phase-badge">{{ stepStage() }}</span>
                   </div>
-                }
-                @if (replayIsSampled()) {
-                  <p>
-                    Sampled replay · {{ replay.probes.length }} recorded probes from
-                    {{ replay.result.attempts }} attempts
-                  </p>
-                }
-                <div class="replay-guess">
-                  <code>{{ attempt.currentCombination }}</code>
-                </div>
-                <mat-slider
-                  class="replay-slider"
-                  [min]="1"
-                  [max]="replay.probes.length === 1 ? 2 : replay.probes.length"
-                  [disabled]="replay.probes.length === 1"
-                >
-                  <input
-                    matSliderThumb
-                    #scrubber="matSliderThumb"
-                    [value]="replayIndex() + 1"
-                    [attr.aria-label]="methodNames[replay.algorithm] + ' replay step'"
-                    (input)="seekReplay(scrubber.value - 1)"
-                    (valueChange)="seekReplay($event - 1)"
-                  />
-                </mat-slider>
-                <div class="replay-controls">
-                  <button
-                    matButton="outlined"
-                    type="button"
-                    (click)="moveReplay(-1)"
-                    [disabled]="replayIndex() === 0"
-                  >
-                    Previous
-                  </button>
-                  <p role="status">
-                    @if (replayIsSampled()) {
-                      Probe {{ attempt.attempts }} of {{ replay.result.attempts }}
-                    } @else {
-                      Step {{ replayIndex() + 1 }} of {{ replay.probes.length }}
+                  <p>Recorded execution. Playback speed does not change execution time.</p>
+                  @if (replayIsSampled()) {
+                    <p class="sample-note">
+                      Sampled replay · {{ replay.probes.length }} recorded steps from
+                      {{ replay.result.attempts }} attempts
+                    </p>
+                  }
+                  <ol class="digit-grid" aria-label="Step combination">
+                    @for (cell of stepCells(); track cell.index) {
+                      <li
+                        [class.digit-active]="cell.active"
+                        [class.digit-fixed]="cell.fixed"
+                        [class.digit-changed]="cell.changed"
+                        [attr.aria-label]="
+                          'Position ' +
+                          (cell.index + 1) +
+                          ': ' +
+                          cell.digit +
+                          (cell.fixed ? ', confirmed' : '')
+                        "
+                      >
+                        <span aria-hidden="true">{{ cell.digit }}</span>
+                      </li>
                     }
-                  </p>
-                  <button
-                    matButton="outlined"
-                    type="button"
-                    (click)="moveReplay(1)"
-                    [disabled]="replayIndex() === replay.probes.length - 1"
+                  </ol>
+                  <div class="digit-legend">
+                    <span>Outlined: active position</span><span>Green: confirmed digit</span>
+                  </div>
+                  <p class="step-explanation">{{ stepExplanation() }}</p>
+                  @if (step.score !== undefined && step.score !== null) {
+                    <p class="step-feedback">
+                      Feedback: <strong>{{ step.score }}</strong>
+                      {{ step.phase === 'discovery' ? 'shared digits' : 'exact-position matches' }}
+                    </p>
+                  }
+                  @if (step.phase === 'discovery' || step.phase === 'permutation') {
+                    <div class="digit-pool">
+                      <span>Discovered digits</span
+                      ><code>{{ step.discoveredDigits || 'None yet' }}</code>
+                    </div>
+                  }
+                  @if (step.fixedPrefix) {
+                    <div class="digit-pool">
+                      <span>Confirmed prefix</span><code>{{ step.fixedPrefix }}</code>
+                    </div>
+                  }
+                  <mat-slider
+                    class="replay-slider"
+                    [min]="1"
+                    [max]="replay.probes.length === 1 ? 2 : replay.probes.length"
+                    [disabled]="replay.probes.length === 1"
                   >
-                    Next
-                  </button>
-                </div>
-                <p>Probe {{ attempt.attempts }} · {{ formatTime(attempt.timeTaken) }} s elapsed</p>
-              </section>
+                    <input
+                      matSliderThumb
+                      #scrubber="matSliderThumb"
+                      [value]="replayIndex() + 1"
+                      [attr.aria-label]="methodNames[replay.algorithm] + ' replay step'"
+                      (input)="seekReplay(scrubber.value - 1)"
+                      (valueChange)="seekReplay($event - 1)"
+                    />
+                  </mat-slider>
+                  <div class="replay-controls">
+                    <button
+                      matButton="outlined"
+                      type="button"
+                      (click)="moveReplay(-1)"
+                      [disabled]="replayIndex() === 0"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      matButton="filled"
+                      type="button"
+                      (click)="togglePlayback()"
+                      [disabled]="replay.probes.length < 2"
+                    >
+                      {{ replayPlaying() ? 'Pause' : 'Play steps' }}
+                    </button>
+                    <button
+                      matButton="outlined"
+                      type="button"
+                      (click)="moveReplay(1)"
+                      [disabled]="replayIndex() === replay.probes.length - 1"
+                    >
+                      Next
+                    </button>
+                  </div>
+                  <div class="replay-footer">
+                    <p role="status">
+                      Step {{ replayIndex() + 1 }} of {{ replay.probes.length }} · Attempt
+                      {{ step.attempts }} of {{ replay.result.attempts }}
+                    </p>
+                    <label class="speed-control"
+                      >Speed
+                      <select
+                        aria-label="Playback speed"
+                        [value]="playbackSpeed()"
+                        (change)="changeSpeed($event)"
+                      >
+                        <option value="0.5">0.5×</option>
+                        <option value="1">1×</option>
+                        <option value="2">2×</option>
+                        <option value="4">4×</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p>Recorded at {{ formatTime(step.timeTaken) }} s</p>
+                </section>
+              }
             }
           </div>
         </section>

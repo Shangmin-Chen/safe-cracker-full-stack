@@ -1,68 +1,71 @@
 import unittest
+from itertools import permutations
+from unittest.mock import patch
 
-from backend.backtracking import crack_backtracking_attempts
-
-
-class FakeBacktrackingScorer:
-    def __init__(self, target: str) -> None:
-        self.target = target
-        self.count_guesses: list[str] = []
-        self.open_guesses: list[str] = []
-
-    def count_matches(self, guess: str, /) -> int:
-        self.count_guesses.append(guess)
-        return self.target.count(guess[0])
-
-    def opens(self, guess: str, /) -> bool:
-        self.open_guesses.append(guess)
-        return guess == self.target
+from backend.backtracking import crack_safe, sound_tool
 
 
 class BacktrackingTests(unittest.TestCase):
-    def test_all_zeroes_opens_on_first_probe_without_a_second_call(self):
-        scorer = FakeBacktrackingScorer("0000000000")
-        attempts = list(crack_backtracking_attempts(scorer))
+    def test_sound_tool_counts_shared_digits_including_repeats(self):
+        self.assertEqual(sound_tool("0900", "9000"), 4)
+        self.assertEqual(sound_tool("0900", "9888"), 1)
+        self.assertEqual(sound_tool("0900", "9999"), 1)
+        self.assertEqual(sound_tool("0900", "0000"), 3)
+        self.assertEqual(sound_tool("0900", "8888"), 0)
 
-        self.assertEqual(scorer.count_guesses, ["0000000000"])
-        self.assertEqual(scorer.open_guesses, [])
-        self.assertEqual(len(attempts), 1)
-        self.assertEqual(attempts[0].current_combination, "0000000000")
-        self.assertTrue(attempts[0].opened)
+    def test_uniform_combinations_complete_discovery_then_test_one_permutation(self):
+        for target in ("0000", "9999"):
+            with self.subTest(target=target):
+                with patch("backend.backtracking.sound_tool", wraps=sound_tool) as scorer:
+                    result = crack_safe(target)
+
+                self.assertEqual(scorer.call_count, 10)
+                self.assertEqual(result["attempts"], 11)
+                self.assertEqual(set(result), {"attempts", "time_taken"})
+                self.assertGreaterEqual(result["time_taken"], 0)
 
     def test_preserves_leading_zeroes_when_searching_permutations(self):
-        scorer = FakeBacktrackingScorer("0100000000")
-        attempts = list(crack_backtracking_attempts(scorer))
+        target = "0100000000"
+        with patch("backend.backtracking.sound_tool", wraps=sound_tool) as scorer:
+            result = crack_safe(target)
 
-        self.assertEqual(len(scorer.count_guesses), 10)
-        self.assertEqual(attempts[-1].current_combination, "0100000000")
-        self.assertTrue(attempts[-1].opened)
-        self.assertEqual(attempts[-1].attempts, 10 + len(scorer.open_guesses))
+        self.assertEqual(result["attempts"], 19)
+        self.assertEqual(scorer.call_count, 10)
 
     def test_duplicate_digit_permutations_are_checked_once_each(self):
-        scorer = FakeBacktrackingScorer("1111111110")
-        attempts = list(crack_backtracking_attempts(scorer))
+        target = "1111111110"
+        with patch("backend.backtracking.sound_tool", wraps=sound_tool) as scorer:
+            result = crack_safe(target)
 
-        self.assertEqual(len(scorer.count_guesses), 10)
-        self.assertEqual(len(scorer.open_guesses), 10)
-        self.assertEqual(len(scorer.open_guesses), len(set(scorer.open_guesses)))
-        self.assertEqual(attempts[-1].current_combination, "1111111110")
-        self.assertTrue(attempts[-1].opened)
+        self.assertEqual(scorer.call_count, 10)
+        self.assertEqual(result["attempts"], 20)
 
-    def test_every_probe_has_one_contiguous_attempt_number(self):
-        scorer = FakeBacktrackingScorer("0000000001")
-        attempts = list(crack_backtracking_attempts(scorer))
-        actual_probes = len(scorer.count_guesses) + len(scorer.open_guesses)
+    def test_full_digit_score_does_not_stop_on_the_wrong_order(self):
+        target = "0900"
+        with patch("backend.backtracking.sound_tool", wraps=sound_tool) as scorer:
+            result = crack_safe(target)
 
-        self.assertEqual(len(attempts), actual_probes)
         self.assertEqual(
-            [attempt.attempts for attempt in attempts],
-            list(range(1, actual_probes + 1)),
+            [call.args[1] for call in scorer.call_args_list[:10]],
+            [digit * 4 for digit in "0123456789"],
         )
-        self.assertEqual(
-            [attempt.current_combination for attempt in attempts[:10]],
-            [str(digit) * 10 for digit in range(10)],
-        )
-        self.assertTrue(attempts[-1].opened)
+        self.assertEqual(scorer.call_count, 10)
+        self.assertEqual(result["attempts"], 13)
+
+    def test_discovers_123789_and_tries_permutations_until_983271(self):
+        target = "983271"
+        with patch("backend.backtracking.sound_tool", wraps=sound_tool) as scorer:
+            result = crack_safe(target)
+
+        expected = ["".join(digits) for digits in permutations("123789")]
+        self.assertEqual(scorer.call_count, 10)
+        self.assertEqual(result["attempts"], 10 + expected.index(target) + 1)
+
+    def test_rejects_invalid_combinations(self):
+        for combination in ("", "123x", "１２３４", 1234567890, None):
+            with self.subTest(combination=combination):
+                with self.assertRaises(ValueError):
+                    crack_safe(combination)
 
 
 if __name__ == "__main__":
